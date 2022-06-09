@@ -3,7 +3,7 @@ import logging
 import sys
 import numpy.typing as npt
 
-from jpe_coord_convert import JPECoord
+from ..jpe_coord_convert import JPECoord
 from time import time
 from pathlib import Path
 from subprocess import Popen, run, DEVNULL, CREATE_NEW_CONSOLE

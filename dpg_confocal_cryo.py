@@ -12,23 +12,32 @@ import logging as log
 
 from apis.scanner import Scanner
 from apis.fpga_cryo import CryoFPGA
+from apis.dummy.fpga_cryo_dummy import DummyCryoFPGA
+from apis.dummy.objective_dummy import DummyObjective
 import apis.rdpg as rdpg
 from apis.objective_control import Objective
 dpg = rdpg.dpg
 
+DUMMY = True
 
 # Slowly turning into a mess of a file
 # Ideally this should be better encapsulated into individual modules
 # that then combine together into one file. However that requires
 # figuring out how to properly share the instrument/data between files
 # which will be a bit tricky...
-
 log.basicConfig(format='%(levelname)s:%(message)s ', level=log.DEBUG)
 
-# Setup fpga control
-# Dummy for testing
-fpga = CryoFPGA()
-obj = Objective()
+# Setup dummy control
+if DUMMY:
+    log.warning("Using Dummy Controls")
+    fpga = DummyCryoFPGA()
+    obj = DummyObjective()
+# Setup real control
+else:
+    log.warning("Using Real Controls")
+    fpga = CryoFPGA()
+    obj = Objective()
+
 # Setup counts data
 counts_data = {'counts':[0],
                'AI1' :[0],
@@ -266,7 +275,7 @@ def save_counts(*args):
     print(path)
     with path.open('w') as f:
         f.write("Timestamp,Counts,AI1\n")
-        for point in enumerate(zip(counts_data['time'],counts_data['counts'],counts_data['AI1']):
+        for point in enumerate(zip(counts_data['time'],counts_data['counts'],counts_data['AI1'])):
             for d in point:
                 f.write(f"{d[0]},{d[1]},{d[2]}\n")
 

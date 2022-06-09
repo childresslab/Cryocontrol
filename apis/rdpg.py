@@ -4,6 +4,10 @@ from typing import Callable, Union, Any
 from pathlib import Path
 from ast import literal_eval
 
+import logging as log
+log.basicConfig(format='%(levelname)s:%(message)s ', level=log.DEBUG)
+
+
 class TreeDict():
     def __init__(self, parent:Union[str,int], savename:str) -> None:
         self.parent = parent
@@ -44,21 +48,25 @@ class TreeDict():
             self.skip_save.append(name)
 
         hierarchy = name.split('/')
+        #log.debug(f"Item Hierarchy: {hierarchy}")
         layer_dict = self.dict
         # Traverse the hierarchy above the new item, creating
         # layers that don't already exist
         for i,layer in enumerate(hierarchy[:-1]):
+            log.debug(f"{layer},{list(layer_dict.keys())}")
             if layer not in layer_dict.keys():
                 layer_dict[layer] = {}
                 if i == 0:
                     parent = self.parent
                 else:
-                    parent = '/'.join(hierarchy[:i-1])
+                    parent = '/'.join(hierarchy[:i])
+                tag = '/'.join(hierarchy[:i+1])
                 node_dict = {'label' : layer,
-                             'tag' : '/'.join(hierarchy[:1]),
+                             'tag' : tag,
                              'parent' : parent,
                              'default_open' : True}
                 node_dict.update(node_kwargs)
+                log.debug(f"Creating Tree Node {tag}")
                 dpg.add_tree_node(**node_dict)
             layer_dict = layer_dict[layer]
 
@@ -105,6 +113,7 @@ class TreeDict():
         item_dict.update(item_kwargs)
         with dpg.group(horizontal=True,parent=parent):
             dpg.add_text(f"{hierarchy[-1]}:",tag=f"{name}_label")
+            #log.debug(f"Creating item {name}")
             creation_func(**item_dict)
             if tooltip != "":
                 with dpg.tooltip(name):

@@ -1,6 +1,6 @@
-import fpga_base as fb
-from pulse_generator import PulseGen
-from jpe_coord_convert import JPECoord
+from .import fpga_base as fb
+from .pulse_generator import PulseGen
+from .jpe_coord_convert import JPECoord
 import numpy as np
 from time import sleep, time
 
