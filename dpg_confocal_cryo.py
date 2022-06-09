@@ -13,6 +13,7 @@ import logging as log
 from apis.scanner import Scanner
 from apis.dummy.fpga_cryo_dummy import DummyCryoFPGA
 from apis.dummy.objective_dummy import DummyObjective
+from interfaces.hist_plot import mvHistPlot
 import apis.rdpg as rdpg
 dpg = rdpg.dpg
 
@@ -36,8 +37,14 @@ position_register = {"temp_galvo_position":fpga.get_galvo()}
 #################
 # Galvo Control #
 #################
-def set_galvo(x,y):
-    fpga.set_galvo(x,y,write=True)
+def set_galvo(x,y,write=True):
+    fpga.set_galvo(x,y,write=write)
+    if (x is None or y is None):
+        galvo_pos = fpga.get_galvo()
+        if x is None:
+            x = galvo_pos[0]
+        if y is None:
+            y = galvo_pos[1]
     set_cursor(x,y)
 
 def man_set_galvo(*args):
@@ -76,7 +83,9 @@ def start_scan(sender,app_data,user_data):
         ymin = np.min(pos[0])
         ymax = np.max(pos[0])
         position_register["temp_galvo_position"] = fpga.get_galvo()
-        dpg.configure_item("heat_series",rows=steps[0],cols=steps[1],
+        dpg.configure_item("heat_series",
+                           rows=int(galvo_scan.steps[0]),
+                           cols=int(galvo_scan.steps[1]),
                            bounds_min=(xmin,ymin),bounds_max=(xmax,ymax))
     
     def abort(i,imax,idx,pos,res):
@@ -238,6 +247,8 @@ def plot_counts(*args):
     dpg.set_value('AI1_series',[rdpg.offset_timezone(counts_data['time']),counts_data['AI1']])
     dpg.set_value('counts_series2',[rdpg.offset_timezone(counts_data['time']),counts_data['counts']])
     dpg.set_value('avg_counts_series2',[rdpg.offset_timezone(avg_time),avg_counts])
+    dpg.set_value('counts_series3',[rdpg.offset_timezone(counts_data['time']),counts_data['counts']])
+    dpg.set_value('avg_counts_series3',[rdpg.offset_timezone(avg_time),avg_counts])
 
 def start_counts():
     if not dpg.get_value('count'):
@@ -425,46 +436,129 @@ def set_cav_and_count(z):
 ######################
 # Objective Scanning #
 ######################
+obj_plot = mvHistPlot("Obj. Plot",False,None,True,False,1000,0,300,100000,'viridis',True,0,1E9,50,50)
+
+# NOTE:
+# The bare api of the objective control is setup so that more negative values
+# are physically upwards in the cryostat.
+# Here, we have opted to invert that, such that a more positive value
+# is upwards in the cryo, such that plotting and moving makes more sense.
 def obj_scan_func(fixed_galvo_axis='y'):
     if fixed_galvo_axis not in ['x','y']:
         raise ValueError("Axis must be 'x' or 'y'")
+    if fixed_galvo_axis=='x':
+        def func(z,y):
+            log.debug(f"Set galvo y to {y} V.")
+            log.debug(f"Set obj. position to {z} um.")
+            set_galvo(None,y,write=False)
+            set_obj_abs(z)
+            count = fpga.just_count(dpg.get_value("Joint Scan/Count Time (ms)"))
+            log.debug(f"Got count rate of {count}.")
+            if dpg.get_value("Counts/Plot Scan Counts"):
+                counts_data['counts'].append(count)
+                counts_data['time'].append(datetime.now().timestamp())
+            return count
+        return func
     if fixed_galvo_axis=='y':
-        def func(x,z):
-                log.debug(f"Set galvo x to {x} V.")
-                log.debug(f"Set obj. position to {z} um.")
-                fpga.set_galvo(x,None,write=False)
-                obj.set_position(z)
-                dpg.set_value("Galvo/Position",x)
-                dpg.set_value("Objective/Position",z)
-                count = fpga.just_count(dpg.get_value("Scan/Count Time (ms)"))
-                log.debug(f"Got count rate of {count}.")
+        def func(z,x):
+            log.debug(f"Set galvo x to {x} V.")
+            log.debug(f"Set obj. position to {z} um.")
+            set_galvo(x,None,write=False)
+            set_obj_abs(z)
+            count = fpga.just_count(dpg.get_value("Joint Scan/Count Time (ms)"))
+            log.debug(f"Got count rate of {count}.")
+            if dpg.get_value("Counts/Plot Scan Counts"):
+                counts_data['counts'].append(count)
+                counts_data['time'].append(datetime.now().timestamp())
+            return count
+        return func
+obj_scan = Scanner(obj_scan_func('x'),[0,0],[1,1],[50,50],[1],[],float,['y','x'],default_result=-1)
+
+
+def start_obj_scan(sender,app_data,user_data):
+    if not dpg.get_value('Objective/Scan'):
+        return -1
+    if dpg.get_value("count"):
+        dpg.set_value("count",False)
+        sleep(dpg.get_value("Counts/Count Time (ms)")/1000)
+    obj_steps = dpg.get_value("Joint Scan/Obj./Steps")
+    obj_center = dpg.get_value("Joint Scan/Obj./Center (um)")
+    obj_span = dpg.get_value("Joint Scan/Obj./Span (um)")
+    galv_steps = dpg.get_value("Joint Scan/Galvo/Steps")
+    galv_center = dpg.get_value("Joint Scan/Galvo/Center (V)")
+    galv_span = dpg.get_value("Joint Scan/Galvo/Span (V)")
+    obj_scan.steps = [obj_steps,galv_steps]
+    obj_scan.centers = [obj_center,galv_center]
+    obj_scan.spans = [obj_span,galv_span]
+    
+    def init():
+        pos = obj_scan._get_positions()
+        xmin = np.min(pos[1])
+        xmax = np.max(pos[1])
+        ymin = np.min(pos[0])
+        ymax = np.max(pos[0])
+        position_register["temp_obj_position"] = obj.position
+        dpg.configure_item("Obj. Plot_heat_series",
+                           rows=int(obj_scan.steps[0]),
+                           cols=int(obj_scan.steps[1]),
+                           bounds_min=(xmin,ymin),bounds_max=(xmax,ymax))
+    
+    def abort(i,imax,idx,pos,res):
+        return not dpg.get_value('Objective/Scan')
+
+    def prog(i,imax,idx,pos,res):
+            log.debug("Setting Progress Bar")
+            dpg.set_value("pb",(i+1)/imax)
+            dpg.configure_item("pb",overlay=f"{i+1}/{imax}")
+            check = (not (i+1) % dpg.get_value("Joint Scan/Galvo/Steps")) or (i+1)==imax
+            if check:
+                log.debug("Updating Galvo Scan Plot")
+                plot_data = np.copy(np.flip(obj_scan.results,0))
+                obj_plot.update_plot(plot_data)
+                if dpg.get_value("Plot/Autoscale"):
+                    obj_plot.autoscale()
                 if dpg.get_value("Counts/Plot Scan Counts"):
-                    counts_data['counts'].append(count)
-                    counts_data['time'].append(datetime.now().timestamp())
-                return count
+                    plot_counts()
+
+    def finish(results,completed):
+        dpg.set_value('Objective/Scan',False)
+        set_obj_abs(position_register["temp_obj_position"])
+        if dpg.get_value("auto_save"):
+            save_scan()
+
+    obj_scan._init_func = init
+    obj_scan._abort_func = abort
+    obj_scan._prog_func = prog
+    obj_scan._finish_func = finish
+    obj_scan.run_async()
 
 def toggle_objective(sender,app_data,user_data):
     if app_data:
         obj.initialize()
-        dpg.set("Objective/Status", "Initialized")
-        pos = obj.position
-        dpg.set("Objective/Current Position (um)",pos)
-        dpg.set("Objective/Set Position (um)",pos)
+        dpg.set_value("Objective/Status", "Initialized")
+        pos = -obj.position
+        dpg.set_value("Objective/Current Position (um)",pos)
+        dpg.set_value("Objective/Set Position (um)",pos)
         set_objective_params()
     else:
         obj.deinitialize()
-        dpg.set("Objective/Status", "Deinitialized")
+        dpg.set_value("Objective/Status", "Deinitialized")
 
 def set_objective_params(*args):
     if obj.initialized:
-        limits = dpg.get("Objective/Limits (um)")
+        limits = dpg.get_value("Objective/Limits (um)")
         obj.soft_lower = limits[0]
         obj.soft_upper = limits[1]
-        obj.max_move = dpg.get("Objective/Max Move (um)")
-        dpg.configure_item('obj_pos_set',min_scale=limits[0],max_scale=limits[1])
-        dpg.configure_item('obj_pos_get',min_scale=limits[0],max_scale=limits[1])
+        obj.max_move = dpg.get_value("Objective/Max Move (um)")
+        dpg.configure_item('obj_pos_set',min_value=limits[0],max_value=limits[1])
+        dpg.configure_item('obj_pos_get',min_value=limits[0],max_value=limits[1])
 
-def set_obj_abs_pos(position):
+def set_obj_callback(sender,app_data,user_data):
+    return set_obj_abs(app_data)
+
+
+def set_obj_abs(position):
+    position = -position
     def func():
         obj.move_abs(position,monitor=True,monitor_callback=obj_move_callback)
     t = Thread(target=func)
@@ -501,11 +595,10 @@ def obj_move_callback(status,position,setpoint):
     if status['error']:
         msg += " - Error"
     dpg.set_value("Objective/Status", msg)
-    dpg.set_value("Objective/Current Position (um)",position)
-    dpg.set_value("Objective/Set Position (um)",setpoint)
-    dpg.set_value("obj_pos_set",[setpoint,setpoint])
-    dpg.set_value("obj_pos_get",[position,position])
-    dpg.set("")
+    dpg.set_value("Objective/Current Position (um)",-position)
+    dpg.set_value("Objective/Set Position (um)",-setpoint)
+    dpg.set_value("obj_pos_set",-setpoint)
+    dpg.set_value("obj_pos_get",-position)
     return status['error']
 
 
@@ -516,8 +609,8 @@ def obj_move_callback(status,position,setpoint):
 ###############
 # Main Window #
 ###############
-rdpg.initialize_dpg("Confocal")
-with dpg.window(label="Confocal Scanner Window", tag='main_window'):
+rdpg.initialize_dpg("Cryocontrol")
+with dpg.window(label="Cryocontrol", tag='main_window'):
     ##################
     # Persistant Bar #
     ##################
@@ -719,12 +812,14 @@ with dpg.window(label="Confocal Scanner Window", tag='main_window'):
                 with dpg.child_window(width=400,autosize_x=False,autosize_y=True,tag="obj_tree"):
                     obj_tree = rdpg.TreeDict('obj_tree','cryo_gui_settings/obj_tree_save.csv')
                     obj_tree.add("Objective/Initialize", False,save=False,callback=toggle_objective)
+                    obj_tree.add("Objective/Scan", False,save=False,callback=start_obj_scan)
                     obj_tree.add("Objective/Status","Uninitialized",save=False,item_kwargs={"readonly":True})
-                    obj_tree.add("Objective/Set Position (um)", 100.0,callback=set_objective_params,item_kwargs={"on_enter":True})
-                    obj_tree.add("Objective/Current Position (um)", 100.0,callback=set_objective_params,item_kwargs={"readonly":True})
+                    obj_tree.add("Objective/Set Position (um)", 100.0,callback=set_obj_callback,item_kwargs={"on_enter":True})
+                    obj_tree.add("Objective/Current Position (um)", 100.0,item_kwargs={"readonly":True,'step':0})
                     obj_tree.add("Objective/Limits (um)",[-8000.0,8000.0],callback=set_objective_params,item_kwargs={"on_enter":True})
                     obj_tree.add("Objective/Max Move (um)", 100.0,callback=set_objective_params,item_kwargs={"on_enter":True})
                     obj_tree.add("Objective/Rel. Step (um)", 5)
+                    obj_tree.add("Joint Scan/Count Time (ms)", 10,item_kwargs={'min_value':0,'min_clamped':True})
                     obj_tree.add("Joint Scan/Obj./Center (um)",0)
                     obj_tree.add("Joint Scan/Obj./Span (um)",50)
                     obj_tree.add("Joint Scan/Obj./Steps",50)
@@ -732,42 +827,42 @@ with dpg.window(label="Confocal Scanner Window", tag='main_window'):
                     obj_tree.add("Joint Scan/Galvo/Center (V)",0)
                     obj_tree.add("Joint Scan/Galvo/Span (V)",0.05)
                     obj_tree.add("Joint Scan/Galvo/Steps",50)
-                with dpg.child_window(width=0,height=0,autosize_y=True): 
+                with dpg.child_window(width=0,height=0,autosize_y=True):
                     with dpg.group(horizontal=True):
                         with dpg.child_window(width=100):
                             dpg.add_button(width=0,indent=25,arrow=True,direction=dpg.mvDir_Up,callback=obj_step_up)
                             dpg.add_button(width=0,indent=25,arrow=True,direction=dpg.mvDir_Down,callback=obj_step_down)
                             dpg.add_text('Obj. Pos.')
-                            dpg.add_simple_plot(height=650,default_value=[0,0],min_scale=obj._soft_lower,max_scale=obj._soft_upper,tag='obj_pos_set')
-                            dpg.add_simple_plot(height=650,default_value=[0,0],min_scale=obj._soft_lower,max_scale=obj._soft_upper,tag='obj_pos_get')
-                        with dpg.child_window(width=-400,height=-200): 
-                            with dpg.plot(label="Heat Series",width=-1,height=-1,
-                                            equal_aspects=True,tag="obj_plot",query=True):
-                                dpg.bind_font("plot_font")
-                                # REQUIRED: create x and y axes
-                                dpg.add_plot_axis(dpg.mvXAxis, label="x", tag="obj_heat_x")
-                                dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="obj_heat_y")
-                                dpg.add_heat_series(np.zeros((50,50)),50,50,
-                                                    scale_min=0,scale_max=1000,
-                                                    parent="obj_heat_y",label="heatmap",
-                                                    tag="obj_heat_series",format='',)
-                                dpg.bind_colormap("obj_plot",dpg.mvPlotColormap_Viridis)
-
-                        with dpg.child_window(width=-0,height=-200):
+                            dpg.bind_item_font(dpg.last_item(),"small_font")
                             with dpg.group(horizontal=True):
-                                dpg.add_colormap_scale(min_scale=0,max_scale=1000,
-                                                        width=100,height=-1,tag="obj_colormap",
-                                                        colormap=dpg.mvPlotColormap_Viridis)
-                                with dpg.plot(label="Histogram", width=-1,height=-1,tag='obj_histogram'):
-                                    dpg.bind_font("plot_font")
-                                    dpg.add_plot_axis(dpg.mvXAxis,label="Occurance",tag="obj_hist_x")
-                                    dpg.add_plot_axis(dpg.mvYAxis,label="Counts",tag="obj_hist_y")
-                                    dpg.add_area_series([0],[0],parent="obj_hist_x",
-                                                        fill=[120,120,120,120],tag="obj_hist")
-                                    dpg.add_drag_line(callback=set_scale,default_value=0,
-                                                        parent="obj_histogram",tag="obj_line1",vertical=False)
-                                    dpg.add_drag_line(callback=set_scale,default_value=0,
-                                                        parent="obj_histogram",tag="obj_line2",vertical=False)
+                                dpg.bind_item_font(dpg.last_item(),"small_font")
+                                dpg.add_slider_float(height=650,width=35,default_value=0,
+                                                     min_value=obj._soft_lower, vertical=True,
+                                                     max_value=obj._soft_upper,tag='obj_pos_set',
+                                                     enabled=False,no_input=True)
+                                dpg.add_slider_float(height=650,width=35,default_value=0,
+                                                     min_value=obj._soft_lower, vertical=True,
+                                                     max_value=obj._soft_upper,tag='obj_pos_get',
+                                                     enabled=False,no_input=True)
+                                
+                        with dpg.group():
+                            obj_plot.parent = dpg.last_item()
+                            obj_plot.height = -330
+                            obj_plot.scale_width = 335
+                            obj_plot.make_gui()
+                            with dpg.child_window(width=-0,height=320):
+                                with dpg.plot(label="Count Rate",width=-1,height=300,tag="count_plot3"):
+                                    dpg.bind_font("plot_font") 
+                                    # REQUIRED: create x and y axes
+                                    dpg.add_plot_axis(dpg.mvXAxis, label="x", time=True, tag="count_x3")
+                                    dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="count_y3")
+                                    dpg.add_line_series(rdpg.offset_timezone(counts_data['time']),
+                                                        counts_data['counts'],
+                                                        parent='count_y3',label='counts', tag='counts_series3')
+                                    dpg.add_line_series(rdpg.offset_timezone(counts_data['time']),
+                                                        counts_data['counts'],
+                                                        parent='count_y3',label='avg. counts', tag='avg_counts_series3')
+                                    dpg.add_plot_legend()
 # Initialize Values
 galvo_position = fpga.get_galvo()
 print(galvo_position)

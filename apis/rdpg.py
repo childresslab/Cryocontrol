@@ -192,10 +192,11 @@ def initialize_dpg(title:str = "Unamed DPG App"):
         )
     dpg.create_viewport(title=title, width=1920//2, height=1080//2, x_pos=1920//4, y_pos=1080//4)
     with dpg.font_registry():
+        dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 12, default_font=False,tag='small_font')
         dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 18, default_font=True)
         dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Medium.ttf", 18, default_font=False)
         dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Regular.ttf", 18, default_font=False)
-        dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 22, default_font=False, id="plot_font")
+        dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 22, default_font=False, tag="plot_font")
 
 def start_dpg():
     dpg.setup_dearpygui()

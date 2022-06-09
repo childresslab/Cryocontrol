@@ -58,11 +58,11 @@ class mvHistPlot():
         self.cursor = cursor
         self.cursor_callback = cursor_callback
 
-    def make_gui(self,parent):
-        if parent is None:
+    def make_gui(self):
+        if self.parent is None:
             self.parent = dpg.add_window(label="Hist Plot", width=self.width, height=self.height)
         else:
-            self.parent = parent
+            self.parent = self.parent
         scale_width = self.scale_width
         height = self.height
         label = self.label
@@ -70,7 +70,7 @@ class mvHistPlot():
         query = self.query
         rows = self.rows
         cols = self.cols
-        colormap = self.colormap
+        colormap = self.cmap
         cursor = self.cursor
         cursor_callback = self.cursor_callback
 
@@ -111,8 +111,8 @@ class mvHistPlot():
             self.add_cursor(callback=cursor_callback)
 
     def update_plot(self,data):
-        if len(data) != self.rows*self.cols:
-            raise ValueError(f"Length of data array {len(data)} is not equal to num_rows * num_cols = {self.rows*self.cols}. Use set_size() first.")
+        if len(data) != self.rows*self.cols and data.shape[0]*data.shape[1] != self.rows*self.cols:
+            raise ValueError(f"Length of data array {len(data)},{data.shape} is not equal to num_rows * num_cols = {self.rows*self.cols}. Use set_size() first.")
         self.data = data
         dpg.set_value(f"{self.label}_heat_series", [self.data,[0.0,1.0],[],[],[]])
         self.update_histogram()
