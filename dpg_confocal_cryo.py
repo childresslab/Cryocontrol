@@ -18,7 +18,7 @@ import apis.rdpg as rdpg
 from apis.objective_control import Objective
 dpg = rdpg.dpg
 
-DUMMY = True
+DUMMY = False
 
 # Slowly turning into a mess of a file
 # Ideally this should be better encapsulated into individual modules
