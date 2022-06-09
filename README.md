@@ -2,6 +2,7 @@
 Consolidated code for controlling our microcavity cryostat experiment.
 
 # Organization
+```
 cryocontrol/
 |   |-- *.py
 |-- acq_scripts/
@@ -14,6 +15,7 @@ cryocontrol/
 |   |   |-- *.py
 |-- interfaces/
     |-- *.py
+```
 
 Python scripts in the root folder produce GUIs for controlling various aspects of the system.
 As well as ones that are useful for viewing saved data.
