@@ -11,14 +11,10 @@ import lmfit as lm
 import logging as log
 
 from apis.scanner import Scanner
-from apis.fpga_cryo import CryoFPGA
 from apis.dummy.fpga_cryo_dummy import DummyCryoFPGA
 from apis.dummy.objective_dummy import DummyObjective
 import apis.rdpg as rdpg
-from apis.objective_control import Objective
 dpg = rdpg.dpg
-
-DUMMY = True
 
 # Slowly turning into a mess of a file
 # Ideally this should be better encapsulated into individual modules
@@ -27,16 +23,9 @@ DUMMY = True
 # which will be a bit tricky...
 log.basicConfig(format='%(levelname)s:%(message)s ', level=log.DEBUG)
 
-# Setup dummy control
-if DUMMY:
-    log.warning("Using Dummy Controls")
-    fpga = DummyCryoFPGA()
-    obj = DummyObjective()
-# Setup real control
-else:
-    log.warning("Using Real Controls")
-    fpga = CryoFPGA()
-    obj = Objective()
+log.warning("Using Dummy Controls")
+fpga = DummyCryoFPGA()
+obj = DummyObjective()
 
 # Setup counts data
 counts_data = {'counts':[0],
