@@ -1,10 +1,12 @@
 import numpy as np
-import jpe_steppers as jse
-import fpga_cryo as fc
 import vipyr as vp
-from scanner import Scanner
+
 import matplotlib.pyplot as plt
 from time import sleep
+
+from ..apis import jpe_steppers as jse
+from ..apis import fpga_cryo as fc
+from ..apis.scanner import Scanner
 
 from pathlib import Path
 

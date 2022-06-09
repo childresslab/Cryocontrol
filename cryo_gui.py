@@ -5,9 +5,10 @@ from numpy.lib.histograms import histogram
 from datetime import datetime
 from pathlib import Path
 from threading import Thread
-import cryo_remote as cr
 
-import rdpg as rdpg
+import apis.cryo_remote as cr
+import apis.rdpg as rdpg
+
 dpg = rdpg.dpg
 
 

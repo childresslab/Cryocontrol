@@ -1,5 +1,3 @@
-import fpga_cryo as fc # Code for controlling cryo fpga stuff
-import spect # Code for controlling andor spectrometer
 
 import numpy as np
 import pandas as pd
@@ -7,8 +5,12 @@ import matplotlib.pyplot as plt
 import os
 
 from functools import partial
-from scanner import Scanner
 from pathlib import Path
+
+from ..apis import fpga_cryo as fc # Code for controlling cryo fpga stuff
+from ..apis import spect # Code for controlling andor spectrometer
+from ..apis.scanner import Scanner
+
 
 # Set the save directory, and ensure it exists
 SAVE_DIR = Path(r"X:\DiamondCloud\Cryostat setup\Data\2022-05-30_cooldown_cont\cav_spectra")

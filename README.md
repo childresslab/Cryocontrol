@@ -1,2 +1,37 @@
 # Cryocontrol
-Consolidated code for controlling our microcavity cryostat
+Consolidated code for controlling our microcavity cryostat experiment.
+
+# Organization
+cryocontrol/
+|   |-- *.py
+|-- acq_scripts/
+|   |-- *.py
+|-- ana_scripts/
+|   |-- *.py
+|-- apis/
+|   |-- *.py
+|   |-- dummy/
+|   |   |-- *.py
+|-- interfaces/
+    |-- *.py
+
+Python scripts in the root folder produce GUIs for controlling various aspects of the system.
+As well as ones that are useful for viewing saved data.
+e.g. the main gui for controlling the whole experiment or one for viewing plots nicely.
+
+`acq_scripts/` contains python scripts that produce one off measurements and save the date.
+e.g. a script that takes a spectrum over various cavity positions.
+`ana_scripts/` contains python scripts that analyze previously saved data.
+e.g. plotting some data nicely, or running fits
+
+`apis/` contains libraries of code for controlling hardware or running complex operations.
+Basically if you want to import some useful functions for doing something, this is where the script
+you're importing from should go.
+
+`tests/` contains files used for testing any other code in the repo. This could should produce no
+real physical side effects, and only confirm that the logic of the code remains correct between
+changes.
+
+`interfaces/` contains script that produce building blocks of guis in the main folder.
+This can be simple building blocks, like a wrapper around some gui to make joint plots.
+Or more complex parts of the interface, like the confocal code for the main gui.

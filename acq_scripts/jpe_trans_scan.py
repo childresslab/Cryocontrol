@@ -1,5 +1,4 @@
-import fpga_cryo as fc # Code for controlling cryo fpga stuff
-import vipyr as vp # Library for easy oscilloscope interfacing github.com/ry-dgel/vipyr
+
 
 import numpy as np
 import pandas as pd
@@ -8,11 +7,14 @@ import matplotlib.pyplot as plt
 from time import sleep
 
 from functools import partial
-from scanner import Scanner
 from pathlib import Path
 
+from ..apis.scanner import Scanner
+from ..apis import fpga_cryo as fc # Code for controlling cryo fpga stuff
+from ..apis import vipyr as vp # Library for easy oscilloscope interfacing github.com/ry-dgel/vipyr
+
 # Set the save directory, and ensure it exists
-SAVE_DIR = Path(r"X:\DiamondCloud\Cryostat setup\Data\2022-05-30_cooldown_cont\trans_scan")
+SAVE_DIR = Path(r"X:\DiamondCloud\Cryostat setup\Data\2022_01_26_more_scan_tests")
 SAVE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Setup FPGA
@@ -26,42 +28,39 @@ starting_pos = {} # For holding onto the data of where we start
 # Also, make sure that there's a single period of the signal generator's sweep.
 # With the beginning of the sweep being at the left edge of the screen.
 #scope_name = "USB0::0x0699::0x03AF::C011023::INSTR" # This is the visa interface string name, shouldn't change for the same device
-#scope_name = "USB0::0x0699::0x03B5::C010585::INSTR"
-scope_name = 'USB0::0x0699::0x0456::C012257::INSTR' #MDO
+scope_name = "USB0::0x0699::0x03B5::C010585::INSTR"
 scope = vp.VisaScope(vp.VisaInterface(scope_name)) # Open up a vipyr Visa Scope using the above name
 scope.trigger.single = True # Setup the scope to single trigger mode, i.e. stop after a single acquisition
+scope.set_property("MEASU:IMMED:TYP", "MAXI") # Setup the type and source of oscilloscope measurement
+scope.set_property("MEASU:IMMED:SOURCE", "CH2")
+#scope.set_property("MEASU:IMMED:TYP2", "MAXI")
+#scope.set_property("MEASU:IMMED:SOURCE2", "CH1")
 
 # Setup Sig Gen
 # Some manual setup is also requred on the signal generator
 # Namely, make sure that it's outputing an external sync for the scope,
 # and set the amplitude, scan type and frequency appropriately 
-#sig_name = 'USB0::0x0400::0x09C4::DG1G150300137::INSTR'
-sig_name = 'USB0::0x1AB1::0x0642::DG1ZA232603172::INSTR' # New Sig Gen
+sig_name = 'USB0::0x0400::0x09C4::DG1G150300137::INSTR'
 # Bypass all of viyprs fancy stuff, and just open a normal pyvisa interface
 sig = vp.resource_manager.open_resource(sig_name)
 sig.query_delay = 0.1 # Seems like the RIGOL signal generator needs this delay
 
 # Setup the scan, centers and spans are in volts
 centers = [0,0]
-spans = [15,30]
-steps = [48,96]
+spans = [35,35]
+steps = [40,40]
 labels = ["JPEY","JPEX"] # We're scanning in y slowly, and x quickly
-output_type = float # At each point we get a number
+output_type = float # At each point we get an array of two numbers
 
 # Setting up the function to be run at each point
 # This first function tells the scope to start acquiring
 # Since it's in single trigger mode, it'll stop once it's done
 # Then, we return the value of the immediate measurement that we setup above.
 # In this case, the maximum in the signal on channel 2.
-def scope_get_trans_max():
+def scope_get_max():
     # Use the bare interface for quicker running.
     scope._interface.write(scope._commands['acq_start'])
-    #Normalize to reflected power
-    return np.max(scope.channels[1].get_waveform(get_conv=True))/np.mean(scope.channels[0].get_waveform(get_conv=True))
-def scope_get_refl_min():
-    # Use the bare interface for quicker running.
-    scope._interface.write(scope._commands['acq_start'])
-    return np.min(scope.channels[0].get_waveform(get_conv=True))
+    return scope.get_property("MEASU:IMMED:VAL")
 
 # This is the function we run at each setting
 def jpe_xy_trans_scope(jpe_y,jpe_x):
@@ -76,8 +75,7 @@ def jpe_xy_trans_scope(jpe_y,jpe_x):
         # so just return 0 instead of crashing
         return 0
     # Otherwise call the above function to get the max at this point.
-    #return scope_get_refl_min()
-    return scope_get_trans_max()
+    return scope_get_max()
 
 # Setup the scanner object to run the above function at every point,
 # the [1] sets the second axis, in this case x to be snaked, alternating
@@ -103,9 +101,6 @@ def init():
     starting_pos['jpe_pos'] = cryo.get_jpe_pzs()
     starting_pos['cavity_pos'] = cryo.get_cavity()
     starting_pos['galvo_pos'] = cryo.get_galvo()
-    # Setup scope acquisition
-    scope._interface.write(f"{scope._commands['data_start']} 1")
-    scope._interface.write(f"{scope._commands['data_stop']} {scope.acq_points}")
     # Print some useful info
     print("Initial FPGA Positions:")
     print(f"\tJPE: {starting_pos['jpe_pos']}")
@@ -157,8 +152,8 @@ cavity_trans_scan._finish_func = finish
 # Run the scan
 thread = cavity_trans_scan.run()
 # Once done, save the results as a csv, with a header.
-cavity_trans_scan.save_results(SAVE_DIR/'trans_scan_30x15.csv', as_npz=False, header=f"type: trans\ncenters: {centers}\nspans: {spans}\nsteps: {steps}")
-cavity_trans_scan.save_results(SAVE_DIR/'trans_scan_30x15.npz', as_npz=True, header=f"type: trans\ncenters: {centers}\nspans: {spans}\nsteps: {steps}")
+cavity_trans_scan.save_results(SAVE_DIR/'trans_scan_only_pz2.csv', as_npz=False, header=f"type: trans\ncenters: {centers}\nspans: {spans}\nsteps: {steps}")
+cavity_trans_scan.save_results(SAVE_DIR/'trans_scan_only_pz2.npz', as_npz=True, header=f"type: trans\ncenters: {centers}\nspans: {spans}\nsteps: {steps}")
 
 """
 cavity_trans_scan = Scanner(jpe_xy_trans_scope,

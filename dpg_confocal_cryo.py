@@ -1,8 +1,3 @@
-from calendar import c
-from json import tool
-from multiprocessing.sharedctypes import Value
-from stat import FILE_ATTRIBUTE_NOT_CONTENT_INDEXED
-from typing import DefaultDict
 import dearpygui.dearpygui as dpg
 import numpy as np
 from time import sleep,time
@@ -12,13 +7,15 @@ from threading import Thread
 from datetime import datetime
 import datetime as dt
 from pathlib import Path
-from scanner import Scanner
-from fpga_cryo import CryoFPGA
-import rdpg as rdpg
 import lmfit as lm
-dpg = rdpg.dpg
 import logging as log
-from objective_control import Objective
+
+from apis.scanner import Scanner
+from apis.fpga_cryo import CryoFPGA
+import apis.rdpg as rdpg
+from apis.objective_control import Objective
+dpg = rdpg.dpg
+
 
 # Slowly turning into a mess of a file
 # Ideally this should be better encapsulated into individual modules
