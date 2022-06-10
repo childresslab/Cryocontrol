@@ -2,7 +2,11 @@ from multiprocessing.sharedctypes import Value
 from turtle import color, update, window_width
 import numpy as np
 from apis import rdpg
+from threading import Thread
+import logging as log
 dpg = rdpg.dpg
+log.basicConfig(format='%(levelname)s:%(message)s ', level=log.WARNING)
+
 
 colormaps = {'viridis' : dpg.mvPlotColormap_Viridis,
              'plasma' : dpg.mvPlotColormap_Plasma,
@@ -31,7 +35,7 @@ class mvHistPlot():
                  width=500,
                  height=500,
                  scale_width=300,
-                 bin_width=10,
+                 nbin=50,
                  colormap='viridis',
                  autoscale=True,
                  min_hist=0,
@@ -50,13 +54,14 @@ class mvHistPlot():
         self.width = width
         self.height = height
         self.scale_width = scale_width
-        self.bin_width = bin_width
+        self.nbin = nbin
         self.data = np.zeros((rows,cols))
         self.rows = rows
         self.cols = cols
         self.cmap = get_colormap(colormap)
         self.cursor = cursor
         self.cursor_callback = cursor_callback
+        self.update_thread = Thread(target=self.update_func)
 
     def make_gui(self):
         if self.parent is None:
@@ -114,16 +119,21 @@ class mvHistPlot():
         if len(data) != self.rows*self.cols and data.shape[0]*data.shape[1] != self.rows*self.cols:
             raise ValueError(f"Length of data array {len(data)},{data.shape} is not equal to num_rows * num_cols = {self.rows*self.cols}. Use set_size() first.")
         self.data = data
-        dpg.set_value(f"{self.label}_heat_series", [self.data,[0.0,1.0],[],[],[]])
-        self.update_histogram()
-        if self.autoscale:
-            self.autoscale_plots()
+        if self.update_thread is None or not self.update_thread.is_alive():
+            self.update_thread = Thread(target=self.update_func)
+            self.update_thread.run()
+
+    def update_func(self):
+            dpg.set_value(f"{self.label}_heat_series", [self.data,[0.0,1.0],[],[],[]])
+            self.update_histogram()
+            if self.autoscale:
+                self.autoscale_plots()
 
     def update_histogram(self):
         data = self.data
         hist_data = self.data[np.where(np.logical_and(data>=self.minhist,
                                                       data<=self.maxhist))]
-        nbins = max([10,int(round((np.nanmax(hist_data)-np.nanmin(hist_data))/self.bin_width))])
+        nbins = self.nbin
         occ,edges = np.histogram(hist_data,bins=nbins)
         xs = [0] + list(np.repeat(occ,2)) + [0,0] 
         ys = list(np.repeat(edges,2)) + [0]
@@ -193,10 +203,25 @@ class mvHistPlot():
         return xmin,xmax,ymin,ymax
 
     def set_size(self,rows,cols):
+        log.warning(f"Setting {self.label}_heat_series size")
         self.rows = rows
         self.cols = cols
-        dpg.configure_item(f"{self.label}_heat_series",rows=rows,cols=cols)
+        dpg.delete_item(f"{self.label}_heat_series")
+        data = np.ones((rows,cols)) * -1.0
+        dpg.add_heat_series(data,self.rows,self.cols,
+                            scale_min=0,scale_max=1000,
+                            parent=f"{self.label}_heat_y",label=f"{self.label} Heatmap",
+                            tag=f"{self.label}_heat_series",format='',)
+        dpg.add_button(tag=f"{self.label}_autofit",parent=f"{self.label}_heat_series",callback=self.autoscale_plots,label="Autoscale")
+        dpg.add_combo(list(colormaps.keys()),parent=f"{self.label}_heat_series",callback=self.context_select_colormap,
+                                  default_value = self.cmap,label="Select Colormap")
+
+        config = dpg.get_item_configuration(f"{self.label}_heat_series")
+        if rows != config['rows'] or cols != config['cols']:
+            raise RuntimeError(f"Error occured while reconfiguring {self.label}_heat_series")
+
     def set_bounds(self,xmin,xmax,ymin,ymax):
+        log.warning(f"Setting {self.label}_heat_series bounds")
         dpg.configure_item(f"{self.label}_heat_series",bounds_min=(xmin,ymin),bounds_max=(xmax,ymax))
 
     def set_colormap(self,colormap:str):

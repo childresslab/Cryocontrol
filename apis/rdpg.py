@@ -23,19 +23,20 @@ class TreeDict():
                          'list_drag' : {float : dpg.add_drag_floatx,
                                         int   : dpg.add_drag_intx}
                         }
+        self.prefix = f"{parent}_"
         self.savefile = savename
         self.skip_save = []
         dpg.set_frame_callback(1,lambda _: self.load())
 
 
     def __getitem__(self, key):
-        value = dpg.get_value(key)
+        value = dpg.get_value(f"{self.prefix}{key}")
         if value is None:
-            raise ValueError(f"No value found in tree with {key}")
+            raise ValueError(f"No value found in tree with {self.prefix}{key}")
         return value
 
     def __setitem__(self,key,value):
-        dpg.set_value(key,value)
+        dpg.set_value(f"{self.prefix}{key}",value)
     
     def add(self, name:str, value:Any, val_type:type = None, 
             order:int=1, drag:bool = False, save=True, callback = None,
@@ -59,21 +60,21 @@ class TreeDict():
                 if i == 0:
                     parent = self.parent
                 else:
-                    parent = '/'.join(hierarchy[:i])
+                    parent = f"{self.prefix}{'/'.join(hierarchy[:i])}"
                 tag = '/'.join(hierarchy[:i+1])
                 node_dict = {'label' : layer,
-                             'tag' : tag,
+                             'tag' : f"{self.prefix}{tag}",
                              'parent' : parent,
                              'default_open' : True}
                 node_dict.update(node_kwargs)
-                log.debug(f"Creating Tree Node {tag}")
+                log.debug(f"Creating Tree Node {self.prefix}{tag}")
                 dpg.add_tree_node(**node_dict)
             layer_dict = layer_dict[layer]
 
         if hierarchy[-1] in layer_dict.keys():
             raise RuntimeError(f"{name} already exists in tree.")
 
-        parent = '/'.join(hierarchy[:-1])
+        parent = f"{self.prefix}{'/'.join(hierarchy[:-1])}"
         layer_dict[hierarchy[-1]] = name
 
         # Autodetect type and order of object.
@@ -101,8 +102,8 @@ class TreeDict():
             creation_func = self.f_lookup[lookup][val_type]
         except KeyError:
             raise TypeError(f"Type {val_type} not valid for widget style {lookup}.")
-
-        item_dict = {'tag' : name,
+        print(f"{self.prefix}{name}")
+        item_dict = {'tag' : f"{self.prefix}{name}",
                      'default_value' : value,
                      'callback' : callback,
                      }
@@ -112,7 +113,7 @@ class TreeDict():
             item_dict['width'] = -1
         item_dict.update(item_kwargs)
         with dpg.group(horizontal=True,parent=parent):
-            dpg.add_text(f"{hierarchy[-1]}:",tag=f"{name}_label")
+            dpg.add_text(f"{hierarchy[-1]}:",tag=f"{self.prefix}{name}_label")
             #log.debug(f"Creating item {name}")
             creation_func(**item_dict)
             if tooltip != "":
@@ -123,6 +124,7 @@ class TreeDict():
         with dpg.mutex():
             path = Path(self.savefile)
             if not path.exists():
+                path.parent.mkdir(parents=True, exist_ok=True)
                 path.touch()
             values_dict = self.collapse_item_dict(self.dict)
             with path.open(filemode) as f:
@@ -185,10 +187,11 @@ def offset_timezone(timestamps:list[float]) -> list[float]:
     offset = (dt.utcfromtimestamp(now) - dt.fromtimestamp(now)).seconds
     return [timestamp - offset for timestamp in timestamps]
 
-def initialize_dpg(title:str = "Unamed DPG App"):
+def initialize_dpg(title:str = "Unamed DPG App",docking=False):
     dpg.create_context()
     dpg.configure_app(
         wait_for_input=False, # Can set to true but items may not live update. Lowers CPU usage
+        docking=docking
         )
     dpg.create_viewport(title=title, width=1920//2, height=1080//2, x_pos=1920//4, y_pos=1080//4)
     with dpg.font_registry():

@@ -1,0 +1,12 @@
+Cavity/Position,0.0
+Scan/Wait Time (ms),10
+Scan/Count Time (ms),5
+Scan/Cavity/Center,0
+Scan/Cavity/Span,16
+Scan/Cavity/Steps,300
+Scan/JPE/Center,[0, 0, 0, 0]
+Scan/JPE/Span,[40, 40, 0, 0]
+Scan/JPE/Steps,[50, 50, 0, 0]
+Plot/Autoscale,True
+Plot/N Bins,10
+Plot/Update Every Point,False
