@@ -46,7 +46,7 @@ class DummyData():
     def __init__(self,n=0):
         if n == 0:
             n = 1
-        self.data = list((np.abs(np.random.randn(n)*1000)).astype(np.uint32))
+        self.data = list((np.abs(np.random.randn(n)*10)).astype(np.uint32))
         self.elements_remaining = 1
 
 class DummyFIFO():

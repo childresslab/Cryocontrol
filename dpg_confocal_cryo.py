@@ -1,4 +1,5 @@
 from pydoc import doc
+from re import U
 from sys import ps1
 import dearpygui.dearpygui as dpg
 import numpy as np
@@ -606,7 +607,7 @@ def guess_obj_time():
 ###################
 # Cavity Scanning #
 ###################
-pzt_plot = mvHistPlot("Piezo Scan",True,None,True,True,1000,0,300,1000,'viridis',True,0,10000,50,50)
+pzt_plot = mvHistPlot("Piezo Scan",True,None,True,True,1000,0,300,1000,'viridis',True,0,1E12,50,50)
 def set_cav_and_count(z):
     try:
         set_cav_pos(z,write=False)
@@ -623,18 +624,66 @@ def set_xy_and_count(y,x):
     count = get_count(pzt_tree["Scan/Count Time (ms)"])
     return count
 
-def set_3d_and_count(y,x,z):
+def do_cav_scan_step():
+    if not dpg.get_value("pzt_3d_scan"):
+        return [-1]
+
+    steps = pzt_tree["Scan/Cavity/Steps"]
+    centers = pzt_tree["Scan/Cavity/Center"]
+    spans = pzt_tree["Scan/Cavity/Span"]
+    jpe_cav_scan.steps = [steps]
+    jpe_cav_scan.centers = [centers]
+    jpe_cav_scan.spans = [spans]
+    cav_data = {}
+
+    def init():
+        log.debug("Starting cav scan sub.")
+        pos = jpe_cav_scan._get_positions()
+        cav_data['counts'] = []
+        cav_data['pos'] = []
+        xmin = np.min(pos[0])
+        xmax = np.max(pos[0])
+        position_register["temp_cav_position"] = fpga.get_cavity()
+        if pzt_tree['Plot/Autoscale']:
+            dpg.set_axis_limits("cav_count_x",xmin,xmax)
+        else:
+            dpg.set_axis_limits_auto("cav_count_x")
+    
+    def abort(i,imax,idx,pos,res):
+        return not dpg.get_value("pzt_3d_scan")
+
+    def prog(i,imax,idx,pos,res):
+        log.debug("Updating Cav Scan Plot")
+        cav_data['counts'].append(res)
+        cav_data['pos'].append(pos[0])
+        dpg.set_value("cav_counts",[cav_data['pos'],cav_data['counts']])
+        if count_tree["Counts/Plot Scan Counts"]:
+            plot_counts()
+
+    def finish(results,completed):
+        if pzt_tree['Plot/Autoscale']:
+            dpg.set_axis_limits("cav_count_y",np.min(results),np.max(results))
+        else:
+            dpg.set_axis_limits_auto("cav_count_y")
+        set_cav_pos(*position_register["temp_cav_position"])
+
+    jpe_cav_scan._init_func = init
+    jpe_cav_scan._abort_func = abort
+    jpe_cav_scan._prog_func = prog
+    jpe_cav_scan._finish_func = finish
+    return jpe_cav_scan.run_async()
+
+def set_xy_get_cav(y,x):
     try:
         set_jpe_pos(x,y,None,write=False)
-        set_cav_pos(z,write=False)
+        do_cav_scan_step().join()
     except FPGAValueError:
-        return 0
-    count = get_count(pzt_tree["Scan/Count Time (ms)"])
-    return count
+        return np.array([-1])
+    return jpe_cav_scan.results
 
 jpe_xy_scan = Scanner(set_xy_and_count,[0,0],[1,1],[50,50],[1],[],float,['y','x'],default_result=-1)
 jpe_cav_scan = Scanner(set_cav_and_count,[0],[1],[50],[],[],float,['z'],default_result=-1)
-jpe_3D_scan = Scanner(set_3d_and_count,[0,0,0],[1,1,1],[50,50,50],[1],[],float,['y','x','z'],default_result=-1)
+jpe_3D_scan = Scanner(set_xy_get_cav,[0,0],[1,1],[50,50],[1],[],object,['y','x'],default_result=np.array([-1]))
 
 def start_xy_scan():
     if not dpg.get_value("pzt_xy_scan"):
@@ -643,9 +692,9 @@ def start_xy_scan():
         dpg.set_value("count",False)
         sleep(count_tree["Counts/Count Time (ms)"]/1000)
 
-    steps = pzt_tree["Scan/JPE/Steps"][:2]
-    centers = pzt_tree["Scan/JPE/Center"][:2]
-    spans = pzt_tree["Scan/JPE/Span"][:2]
+    steps = pzt_tree["Scan/JPE/Steps"][:2][::-1]
+    centers = pzt_tree["Scan/JPE/Center"][:2][::-1]
+    spans = pzt_tree["Scan/JPE/Span"][:2][::-1]
     jpe_xy_scan.steps = steps
     jpe_xy_scan.centers = centers
     jpe_xy_scan.spans = spans
@@ -659,6 +708,7 @@ def start_xy_scan():
         position_register["temp_jpe_position"] = fpga.get_jpe_pzs()
         pzt_plot.set_size(int(jpe_xy_scan.steps[0]),int(jpe_xy_scan.steps[1]))
         pzt_plot.set_bounds(xmin,xmax,ymin,ymax)
+        dpg.configure_item("Piezo Scan_heat_series",label="2D Scan")
     
     def abort(i,imax,idx,pos,res):
         return not dpg.get_value("pzt_xy_scan")
@@ -673,10 +723,7 @@ def start_xy_scan():
                 check = (not (i+1) % pzt_tree["Scan/JPE/Steps"][1]) or (i+1)==imax
             if check:
                 log.debug("Updating XY Scan Plot")
-                plot_data = np.copy(np.flip(jpe_xy_scan.results,0))
-                pzt_plot.autoscale = pzt_tree["Plot/Autoscale"]
-                pzt_plot.nbin = pzt_tree["Plot/N Bins"]
-                pzt_plot.update_plot(plot_data)
+                update_pzt_plot("manual",None,None)
                 if count_tree["Counts/Plot Scan Counts"]:
                     plot_counts()
 
@@ -720,6 +767,7 @@ def start_cav_scan():
             dpg.set_axis_limits("cav_count_x",xmin,xmax)
         else:
             dpg.set_axis_limits_auto("cav_count_x")
+        dpg.configure_item("pzt_tree_Plot/Slice Index",max_value=pzt_tree["Scan/Cavity/Steps"]-1)
     
     def abort(i,imax,idx,pos,res):
         return not dpg.get_value("pzt_cav_scan")
@@ -753,11 +801,106 @@ def start_cav_scan():
 
 def get_cav_range():
     pass
-def start_3d_scan():
-    pass
 
-def update_3d():
-    pass
+def get_reducing_func():
+    func_str = dpg.get_value("reducing_func")
+    if func_str == "Delta":
+        f = lambda d:np.max(d) - np.min(d) if np.atleast_1d(d)[0] >= 0 else -1.0
+        do_func = np.vectorize(f)
+        return do_func
+    if func_str == "Max":
+        f = lambda d:np.max(d) if np.atleast_1d(d)[0] >= 0 else -1.0
+        do_func = np.vectorize(f)
+        return do_func
+    if func_str == "Average":
+        f = lambda d:np.mean(d) if np.atleast_1d(d)[0] >= 0 else -1.0
+        do_func = np.vectorize(f)
+        return do_func
+    if func_str == "Slice":
+        f = lambda d:d[pzt_tree["Plot/3D/Slice Index"]] if np.atleast_1d(d)[0] >= 0 else -1.0
+        do_func = np.vectorize(f)
+        return do_func
+
+def start_3d_scan():
+    if not dpg.get_value("pzt_3d_scan"):
+        return -1
+    if dpg.get_value("count"):
+        dpg.set_value("count",False)
+        sleep(count_tree["Counts/Count Time (ms)"]/1000)
+
+    jpe_steps = pzt_tree["Scan/JPE/Steps"][:2][::-1]
+    jpe_centers = pzt_tree["Scan/JPE/Center"][:2][::-1]
+    jpe_spans = pzt_tree["Scan/JPE/Span"][:2][::-1]
+    jpe_3D_scan.steps = jpe_steps
+    jpe_3D_scan.centers = jpe_centers
+    jpe_3D_scan.spans = jpe_spans
+
+    def init():
+        pos = jpe_3D_scan._get_positions()
+        xmin = np.min(pos[1])
+        xmax = np.max(pos[1])
+        ymin = np.min(pos[0])
+        ymax = np.max(pos[0])
+        position_register["temp_jpe_position"] = fpga.get_jpe_pzs()
+        position_register["temp_cav_position"] = fpga.get_cavity()
+        pzt_plot.set_size(int(jpe_3D_scan.steps[0]),int(jpe_3D_scan.steps[1]))
+        pzt_plot.set_bounds(xmin,xmax,ymin,ymax)
+        dpg.configure_item("Piezo Scan_heat_series",label="3D Scan")
+        dpg.configure_item("pzt_tree_Plot/Slice Index",max_value=pzt_tree["Scan/Cavity/Steps"]-1)
+    
+    def abort(i,imax,idx,pos,res):
+        return not dpg.get_value("pzt_3d_scan")
+
+    def prog(i,imax,idx,pos,res):
+            log.debug("Setting Progress Bar")
+            dpg.set_value("pb",(i+1)/imax)
+            dpg.configure_item("pb",overlay=f"JPE 3D Scan {i+1}/{imax}")
+            if pzt_tree["Plot/Update Every Point"]:
+                check = True
+            else:
+                check = (not (i+1) % jpe_3D_scan.steps[1]) or (i+1)==imax
+            if check:
+                log.debug("Updating 3D Scan Plot")
+                update_pzt_plot("manual",None,None)
+                if count_tree["Counts/Plot Scan Counts"]:
+                    plot_counts()
+
+    def finish(results,completed):
+        dpg.set_value("pzt_3d_scan",False)
+        set_jpe_pos(*position_register["temp_jpe_position"])
+        set_cav_pos(*position_register["temp_cav_position"])
+        if dpg.get_value("auto_save"):
+            save_xy_scan()
+
+    jpe_3D_scan._init_func = init
+    jpe_3D_scan._abort_func = abort
+    jpe_3D_scan._prog_func = prog
+    jpe_3D_scan._finish_func = finish
+    return jpe_3D_scan.run_async()
+
+def update_pzt_plot(sender,app_data,user_data):
+    if "3D" in dpg.get_item_configuration("Piezo Scan_heat_series")['label']:
+        log.debug("Updating 3D Scan Plot")
+        func = get_reducing_func()
+        plot_data = func(np.copy(np.flip(jpe_3D_scan.results,0)))
+    elif "2D" in dpg.get_item_configuration("Piezo Scan_heat_series")['label']:
+        plot_data = np.copy(np.flip(jpe_xy_scan.results,0))
+    if pzt_tree["Plot/Deinterleave"]:
+        if not pzt_tree["Plot/Reverse"]:
+            plot_data[::2,:] = plot_data[1::2,:]
+        else:
+            plot_data[1::2,:] = plot_data[::2,:]
+    pzt_plot.autoscale = pzt_tree["Plot/Autoscale"]
+    pzt_plot.nbin = pzt_tree["Plot/N Bins"]
+    pzt_plot.update_plot(plot_data)
+    if sender == "cav_count_cut":
+        volts = dpg.get_value("cav_count_cut")
+        index = np.argmin(np.abs(jpe_cav_scan.positions[0]-volts))
+        pzt_tree['Plot/3D/Slice Index'] = int(index)
+    if sender == "pzt_tree_Plot/3D/Slice Index":
+        index = app_data
+        volts = jpe_cav_scan.positions[0][index]
+        dpg.set_value("cav_count_cut",volts)
 
 def guess_piezo_time():
     pts = pzt_tree["Scan/JPE/Steps"]
@@ -801,14 +944,12 @@ def set_jpe_pos(x=None,y=None,z=None,write=True):
         z = current_pos[2]
     volts = pz_conv.zs_from_cart([x,y,z])
     in_bounds = pz_conv.check_bounds(x,y,z)
-
     if not in_bounds:
         pzt_tree["JPE/XY Position"] = current_pos[:2]
         pzt_tree["JPE/Z Position"] = current_pos[2]
         raise FPGAValueError("Out of bounds")
 
-    zs = pz_conv.zs_from_cart(volts)
-    pzt_tree["JPE/Z Volts"] = zs
+    pzt_tree["JPE/Z Volts"] = volts
     pzt_tree["JPE/Z Position"] = z
     pzt_tree["JPE/XY Position"] = [x,y]
     fpga.set_jpe_pzs(x,y,z,write=write)
@@ -958,7 +1099,6 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                                 callback=guess_galvo_time)
                     galvo_tree.add("Scan/Estimated Time", "00:00:00", item_kwargs={'readonly':True},
                     save=False)
-                    dpg.add_combo(["Delta","Max","Average","Slice"],parent="galvo_tree_Scan",callback=update_3d)
                 with dpg.group():
                     with dpg.group(horizontal=True):
                         with dpg.child_window(width=-400,height=-300): 
@@ -1158,8 +1298,18 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                     pzt_tree.add("Scan/Estimated Time", "00:00:00", save=False,item_kwargs={'readonly':True})
                     pzt_tree.add("Plot/Autoscale",False)
                     pzt_tree.add("Plot/N Bins",50,item_kwargs={'min_value':1,
-                                                                    'max_value':1000})
+                                                                'max_value':1000},
+                                 callback=update_pzt_plot)
                     pzt_tree.add("Plot/Update Every Point",False)
+                    pzt_tree.add("Plot/Deinterleave",False,callback=update_pzt_plot)
+                    pzt_tree.add("Plot/Reverse",False,callback=update_pzt_plot)
+                    with dpg.group(horizontal=True,parent="pzt_tree_Plot/3D"):
+                        dpg.add_text("Reducing Func.")
+                        dpg.add_combo(["Delta","Max","Average","Slice"],default_value="Delta",
+                                      tag="reducing_func",callback=update_pzt_plot)
+                    pzt_tree.add("Plot/3D/Slice Index",0,drag=True,callback=update_pzt_plot,
+                                 item_kwargs={"min_value":0,"max_value":100,"clamped":True})
+
 
                 with dpg.child_window(width=0,height=0,autosize_y=True):
                         with dpg.group():
@@ -1176,6 +1326,8 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                                     dpg.add_line_series([0],
                                                         [0],
                                                         parent='cav_count_y',label='counts', tag='cav_counts')
+                                    dpg.add_drag_line(tag="cav_count_cut",parent='cav_plot',default_value=0,
+                                                      callback=update_pzt_plot)
                                     dpg.add_plot_legend()
         
 # Initialize Values
@@ -1192,5 +1344,5 @@ guess_galvo_time()
 guess_obj_time()
 draw_bounds()
 dpg.set_primary_window('main_window',True)
-#dpg.show_item_registry()
+dpg.show_item_registry()
 rdpg.start_dpg()
