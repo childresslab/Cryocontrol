@@ -26,8 +26,6 @@ class TreeDict():
         self.prefix = f"{parent}_"
         self.savefile = savename
         self.skip_save = []
-        dpg.set_frame_callback(1,lambda _: self.load())
-
 
     def __getitem__(self, key):
         value = dpg.get_value(f"{self.prefix}{key}")
@@ -145,7 +143,7 @@ class TreeDict():
         parent = f"{self.prefix}{'/'.join(hierarchy[:-1])}"
         layer_dict[hierarchy[-1]] = name
 
-        item_dict = {'values':values,
+        item_dict = {'items':values,
                      'tag' : f"{self.prefix}{name}",
                      'default_value' : default,
                      'callback' : callback,
@@ -155,6 +153,38 @@ class TreeDict():
             dpg.add_text(f"{hierarchy[-1]}:",tag=f"{self.prefix}{name}_label")
             #log.debug(f"Creating item {name}")
             dpg.add_combo(**item_dict)
+            if tooltip != "":
+                with dpg.tooltip(name):
+                    dpg.add_text(tooltip)
+
+    def add_radio(self,name:str,values:list[str],default:str,
+                  save=True,callback=None,
+                  node_kwargs:dict = {}, tooltip:str = "", item_kwargs:dict = {}):
+        callback = self.get_save_callback(callback)
+
+        if not save:
+            self.skip_save.append(name)
+        layer_dict = self._make_nodes(name,node_kwargs)
+        hierarchy = name.split('/')
+        #log.debug(f"Item Hierarchy: {hierarchy}")
+
+        if hierarchy[-1] in layer_dict.keys():
+            raise RuntimeError(f"{name} already exists in tree.")
+
+        parent = f"{self.prefix}{'/'.join(hierarchy[:-1])}"
+        layer_dict[hierarchy[-1]] = name
+
+        item_dict = {'items':values,
+                     'tag' : f"{self.prefix}{name}",
+                     'default_value' : default,
+                     'callback' : callback,
+                     'horizontal' : True
+                    }
+        item_dict.update(item_kwargs)
+        with dpg.group(horizontal=True,parent=parent):
+            dpg.add_text(f"{hierarchy[-1]}:",tag=f"{self.prefix}{name}_label")
+            #log.debug(f"Creating item {name}")
+            dpg.add_radio_button(**item_dict)
             if tooltip != "":
                 with dpg.tooltip(name):
                     dpg.add_text(tooltip)
@@ -196,8 +226,6 @@ class TreeDict():
                 if entries[0] in self.skip_save:
                     continue
                 try:
-                    self.add(entries[0],literal_eval(entries[1]))
-                except RuntimeError:
                     self[entries[0]] = literal_eval(entries[1])
                 # If we can't evaluate it, just add it as a string.
                 except ValueError:
@@ -205,6 +233,8 @@ class TreeDict():
                         self.add(entries[0],entries[1])
                     except RuntimeError:
                         self[entries[0]] = entries[1]
+                except SystemError:
+                    print(f"Couldn't set {entries[0]} to {entries[1]}")
 
     def get_save_callback(self, user_callback:Callable = None):
         # If no user callback is provided, set the item to simply save the tree
