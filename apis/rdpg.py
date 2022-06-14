@@ -38,18 +38,8 @@ class TreeDict():
     def __setitem__(self,key,value):
         dpg.set_value(f"{self.prefix}{key}",value)
     
-    def add(self, name:str, value:Any, val_type:type = None, 
-            order:int=1, drag:bool = False, save=True, callback = None,
-            node_kwargs:dict = {}, tooltip:str = "", item_kwargs:dict = {}):
-        
-        if callback is None:
-            callback = self.get_save_callback()
-
-        if not save:
-            self.skip_save.append(name)
-
+    def _make_nodes(self,name,node_kwargs):
         hierarchy = name.split('/')
-        #log.debug(f"Item Hierarchy: {hierarchy}")
         layer_dict = self.dict
         # Traverse the hierarchy above the new item, creating
         # layers that don't already exist
@@ -70,10 +60,27 @@ class TreeDict():
                 log.debug(f"Creating Tree Node {self.prefix}{tag}")
                 dpg.add_tree_node(**node_dict)
             layer_dict = layer_dict[layer]
+        return layer_dict
 
+    def add(self, name:str, value:Any, val_type:type = None, 
+            order:int=1, drag:bool = False, save=True, callback = None,
+            node_kwargs:dict = {}, tooltip:str = "", item_kwargs:dict = {}):
+        # Generate a callback that also saves the tree
+        callback = self.get_save_callback(callback)
+
+        # Keep track of which items we don't save
+        if not save:
+            self.skip_save.append(name)
+        # Make sure all the nodes needed exist
+        layer_dict = self._make_nodes(name,node_kwargs)
+        hierarchy = name.split('/')
+        #log.debug(f"Item Hierarchy: {hierarchy}")
+        
+        # Block duplicate entries
         if hierarchy[-1] in layer_dict.keys():
             raise RuntimeError(f"{name} already exists in tree.")
 
+        # Get the base items parent object and name
         parent = f"{self.prefix}{'/'.join(hierarchy[:-1])}"
         layer_dict[hierarchy[-1]] = name
 
@@ -85,6 +92,7 @@ class TreeDict():
                 if order == 1:
                     order = len(value)
 
+        # What type of object are we making?
         lookup = 'input'
         if drag:
             if order > 1:
@@ -116,6 +124,37 @@ class TreeDict():
             dpg.add_text(f"{hierarchy[-1]}:",tag=f"{self.prefix}{name}_label")
             #log.debug(f"Creating item {name}")
             creation_func(**item_dict)
+            if tooltip != "":
+                with dpg.tooltip(name):
+                    dpg.add_text(tooltip)
+
+    def add_combo(self,name:str,values:list[str],default:str,
+                  save=True,callback=None,
+                  node_kwargs:dict = {}, tooltip:str = "", item_kwargs:dict = {}):
+        callback = self.get_save_callback(callback)
+
+        if not save:
+            self.skip_save.append(name)
+        layer_dict = self._make_nodes(name,node_kwargs)
+        hierarchy = name.split('/')
+        #log.debug(f"Item Hierarchy: {hierarchy}")
+
+        if hierarchy[-1] in layer_dict.keys():
+            raise RuntimeError(f"{name} already exists in tree.")
+
+        parent = f"{self.prefix}{'/'.join(hierarchy[:-1])}"
+        layer_dict[hierarchy[-1]] = name
+
+        item_dict = {'values':values,
+                     'tag' : f"{self.prefix}{name}",
+                     'default_value' : default,
+                     'callback' : callback,
+                    }
+        item_dict.update(item_kwargs)
+        with dpg.group(horizontal=True,parent=parent):
+            dpg.add_text(f"{hierarchy[-1]}:",tag=f"{self.prefix}{name}_label")
+            #log.debug(f"Creating item {name}")
+            dpg.add_combo(**item_dict)
             if tooltip != "":
                 with dpg.tooltip(name):
                     dpg.add_text(tooltip)
@@ -171,11 +210,11 @@ class TreeDict():
         # If no user callback is provided, set the item to simply save the tree
         if user_callback is None:
             return lambda _: self.save()
-        # Otherwise, we first save the tree and then call the callback.
+        # Otherwise, we first call the callback and then save.
         else:
             def save_cb(sender,app_data,user_data):
-                self.save()
                 user_callback(sender,app_data,user_data)
+                self.save()
             return save_cb
 
 # Plot time axes are always in UTC with no way to adjust.
@@ -200,6 +239,9 @@ def initialize_dpg(title:str = "Unamed DPG App",docking=False):
         dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Medium.ttf", 18, default_font=False)
         dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Regular.ttf", 18, default_font=False)
         dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 22, default_font=False, tag="plot_font")
+        dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 48, default_font=False,tag="big_font")
+        dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 96, default_font=False,tag="huge_font")
+        dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 128, default_font=False,tag="massive_font")
 
 def start_dpg():
     dpg.setup_dearpygui()

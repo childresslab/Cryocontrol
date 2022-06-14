@@ -45,7 +45,7 @@ class mvHistPlot():
                  parent=None):
         self.parent = parent
         self.label = label
-        self.query = query
+        self.queryable = query
         self.equal = equal
         self.cmap = colormap
         self.autoscale = autoscale
@@ -72,7 +72,7 @@ class mvHistPlot():
         height = self.height
         label = self.label
         equal = self.equal
-        query = self.query
+        query = self.queryable
         rows = self.rows
         cols = self.cols
         colormap = self.cmap
@@ -197,10 +197,12 @@ class mvHistPlot():
         dpg.set_value(f"{self.label}_cy",point[1])
         dpg.set_value(f"{self.label}_cc",point)
 
-    def query(self):
+    def query_plot(self):
         if dpg.is_plot_queried(f"{self.label}_plot"):
             xmin,xmax,ymin,ymax = dpg.get_plot_query_area(f"{self.label}_plot")
-        return xmin,xmax,ymin,ymax
+            return xmin,xmax,ymin,ymax
+        else:
+            return None,None,None,None
 
     def set_size(self,rows,cols):
         log.warning(f"Setting {self.label}_heat_series size")
