@@ -123,7 +123,7 @@ class TreeDict():
             #log.debug(f"Creating item {name}")
             creation_func(**item_dict)
             if tooltip != "":
-                with dpg.tooltip(name):
+                with dpg.tooltip(parent=f"{self.prefix}{name}_label"):
                     dpg.add_text(tooltip)
 
     def add_combo(self,name:str,values:list[str],default:str,

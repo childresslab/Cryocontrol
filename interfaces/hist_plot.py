@@ -168,7 +168,7 @@ class mvHistPlot():
                 self.bind_cursor(sender,app_data,user_data)
                 callback(sender,dpg.get_value(f"{self.label}_cc")[:2])
                 return
-
+        log.debug("Adding Cursor")
         dpg.add_drag_point(color=(204,36,29,122),parent=f"{self.label}_plot",
                                 callback=cursor_callback,
                                 default_value=(0.5,0.5),
