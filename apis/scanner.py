@@ -7,6 +7,8 @@ from warnings import warn
 from pathlib import Path
 from threading import Thread
 
+from apis.dummy import objective_dummy
+
 class Scanner():
     """Class for running a function with parameters swept over a grid. 
        Allows for snaking of parameters, as well
@@ -529,7 +531,7 @@ class Scanner():
         positions = self._prev_positions
         if as_npz:
             np.savez(filename, res=results, 
-                               pos=np.array(positions),
+                               pos=np.array(positions,dtype=object),
                                head=np.array(header))
         
         else:

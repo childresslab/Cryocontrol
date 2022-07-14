@@ -57,6 +57,7 @@ position_register = {"temp_galvo_position":fpga.get_galvo()}
 #################
 # Galvo Control #
 #################
+galvo_plot = mvHistPlot("Galvo Plot",True,None,True,True,1000,0,300,50,'viridis',True,0,1E9,50,50)
 def set_galvo(x:float,y:float,write:bool=True) -> None:
     """
     Sets the galvo position, keeping track of updating the cursor position
@@ -83,7 +84,7 @@ def set_galvo(x:float,y:float,write:bool=True) -> None:
         if y is None:
             y = galvo_pos[1]
     # Update the cursor position
-    set_cursor(x,y)
+    galvo_plot.set_cursor([x,y])
     # Update the readout position
     galvo_tree["Galvo/Position"] = [x,y]
 
@@ -175,10 +176,8 @@ def start_scan(sender,app_data,user_data):
         xmax = np.max(pos[1])
         ymin = np.min(pos[0])
         ymax = np.max(pos[0])
-        dpg.configure_item("heat_series",
-                           rows=int(galvo_scan.steps[0]),
-                           cols=int(galvo_scan.steps[1]),
-                           bounds_min=(xmin,ymin),bounds_max=(xmax,ymax))
+        galvo_plot.set_size(int(galvo_scan.steps[0]),int(galvo_scan.steps[1]))
+        galvo_plot.set_bounds(xmin,xmax,ymin,ymax)
         # Store the current position of the galvo for reseting later
         position_register["temp_galvo_position"] = fpga.get_galvo()
     
@@ -193,6 +192,7 @@ def start_scan(sender,app_data,user_data):
         """
         Progress callback for the scanner. Run after every acquisition point
         """
+        print(idx,pos)
         # update the progress bar of the GUI
         log.debug("Setting Progress Bar")
         dpg.set_value("pb",(i+1)/imax)
@@ -206,21 +206,11 @@ def start_scan(sender,app_data,user_data):
         if check:
             log.debug("Updating Galvo Scan Plot")
             # Format data for the plot
-            plot_data = np.copy(np.flip(galvo_scan.results,0))
-            # Updat the plot data
-            dpg.set_value("heat_series", [plot_data,[0.0,1.0],[],[],[]])
-            # Autoscale the plot and histogram if desired
-            if galvo_tree["Plot/Autoscale"]:
-                lower = np.min(plot_data[np.where(plot_data>=0)])
-                upper = np.max(plot_data)
-                dpg.configure_item("colormap",min_scale=lower,max_scale=upper)
-                dpg.configure_item("heat_series",scale_min=lower,scale_max=upper)
-                dpg.set_value("line1",lower)
-                dpg.set_value("line2",upper) 
-                for ax in ["heat_x","heat_y","hist_x","hist_y"]:
-                    dpg.fit_axis_data(ax)
-            # Update the histogram of the plot data.
-            update_histogram(plot_data)
+            plot_data = np.copy(np.flipud(galvo_scan.results))
+            print(plot_data)
+            galvo_plot.autoscale = galvo_tree["Plot/Autoscale"]
+            galvo_plot.nbin = galvo_tree["Plot/N Bins"]
+            galvo_plot.update_plot(plot_data)
             if count_tree["Counts/Plot Scan Counts"]:
                 plot_counts()
 
@@ -244,43 +234,14 @@ def start_scan(sender,app_data,user_data):
     # Run the scan in a new thread
     galvo_scan.run_async()
 
-# Plot Updating
-def update_histogram(data:NDArray[np.float]):
-    """
-    Update the plot histogram, to be removed and put in separate hist_plot class.
-
-    Parameters
-    ----------
-    data : list[list[float]] or NDArray[np.float]
-        the 2d plot data to be shown.
-    """
-    # Only count positive data, as -1 indicates the point isn't scanned yet
-    data = data[np.where(data>=0)]
-    # Get number of bins from GUI
-    nbins = galvo_tree["Plot/N Bins"]
-    occ,edges = np.histogram(data,bins=nbins)
-    xs = [0] + list(np.repeat(occ,2)) + [0,0] 
-    ys = list(np.repeat(edges,2)) + [0]
-    # Plot the data
-    dpg.set_value("histogram",[xs,ys,[],[],[]])
-
-def set_scale(sender,app_data,user_data):
-    val1 = dpg.get_value("line1")
-    val2 = dpg.get_value("line2")
-    lower = min([val1,val2])
-    upper = max([val1,val2])
-    galvo_tree["Plot/Autoscale"] = False
-    dpg.configure_item("colormap",min_scale=lower,max_scale=upper)
-    dpg.configure_item("heat_series",scale_min=lower,scale_max=upper)
-
 def get_galvo_range(*args):
     """
     Callback for querying the scan range from the galvo plot. Or just 
     copying the galvo position as the center of the scan.
     """
     # If plot is queried, copy full scan area
-    if dpg.is_plot_queried("plot"):
-        xmin,xmax,ymin,ymax = dpg.get_plot_query_area("plot")
+    xmin,xmax,ymin,ymax = galvo_plot.query_plot()
+    if xmin is not None:
         new_centers = [(xmin+xmax)/2, (ymin+ymax)/2]
         new_spans = [xmax-xmin, ymax-ymin]
         galvo_tree["Scan/Centers (V)"] = new_centers
@@ -299,7 +260,7 @@ def guess_galvo_time(*args):
     time_string = str(dt.timedelta(seconds=scan_time)).split(".")[0]
     galvo_tree["Scan/Estimated Time"] = time_string
 
-def bound_galvo(point:list[float]):
+def galvo_cursor_callback(point:list[float]):
     """Keep the galvo position within range on the cursor.
 
     Parameters
@@ -320,43 +281,10 @@ def bound_galvo(point:list[float]):
         point[1] = -10
     if point[1] > 10:
         point[1] = 10
-    return point
-
-def cursor_drag(sender,value,user_data):
-    """The callback for any of the cursor components, to get the others to follow as one
-    Updates the positions of the x-line, y-line and central dot.
-
-    Parameters
-    ----------
-    Standard DPG callback
-    """
-    point = dpg.get_value("cc")[:2]
-    if sender == "cx":
-        point[0] = dpg.get_value("cx")
-    elif sender == "cy":
-        point[1] = dpg.get_value("cy")
-    point = bound_galvo(point)
-    dpg.set_value("cx",point[0])
-    dpg.set_value("cy",point[1])
-    dpg.set_value("cc",point)
-    fpga.set_galvo(point[0],point[1],write=False)
     galvo_tree["Galvo/Position"] = point
-    return
+    galvo_plot.set_cursor(point)
 
-def set_cursor(x:float,y:float):
-    """Directly update the cursor components, moving it to a new position.
-
-    Parameters
-    ----------
-    x : float
-        New cursor x-position
-    y : float
-        New cursor y-position
-    """
-    point = [x,y]
-    dpg.set_value("cc",point)
-    dpg.set_value("cx",point[0])
-    dpg.set_value("cy",point[1])
+galvo_plot.cursor_callback = galvo_cursor_callback
 
 # Saving Scans
 def choose_save_dir(*args):
@@ -572,7 +500,7 @@ def optim_scanner_func(axis='x'):
             #TODO: Have this call the set_galvo function instead.
             log.debug(f"Set galvo to ({x},{y}) V.")
             fpga.set_galvo(x,y,write=False)
-            set_cursor(x,y)
+            galvo_plot.set_cursor([x,y])
             galvo_tree["Galvo/Position"] = [x,y]
             count = get_count(optim_tree["Optimizer/Count Time (ms)"])
             log.debug(f"Got count rate of {count}.")
@@ -586,7 +514,7 @@ def optim_scanner_func(axis='x'):
             #TODO: Have this call the set_galvo function instead.
             log.debug(f"Set galvo to ({x},{y}) V.")
             fpga.set_galvo(x,y,write=False)
-            set_cursor(x,y)
+            galvo_plot.set_cursor([x,y])
             galvo_tree["Galvo/Position"] = [x,y]
             count = get_count(optim_tree["Optimizer/Count Time (ms)"])
             log.debug(f"Got count rate of {count}.")
@@ -1401,6 +1329,7 @@ def xy_cursor_callback(sender,position):
     else:
         set_jpe_pos(position[0],position[1],zpos)
 pzt_plot.cursor_callback=xy_cursor_callback
+
 def save_xy_scan(*args):
     path = Path(dpg.get_value("save_dir"))
     filename = dpg.get_value("save_pzt_file")
@@ -1559,48 +1488,11 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                                    save=False,
                                    tooltip="Rough guess of how long scan will take = (count_time + wait_time)*Npts")
                 with dpg.group():
-                    with dpg.group(horizontal=True):
-                        with dpg.child_window(width=-400,height=-300): 
-                            with dpg.plot(label="Heat Series",width=-1,height=-1,
-                                            equal_aspects=True,tag="plot",query=True):
-                                dpg.bind_font("plot_font")
-                                # REQUIRED: create x and y axes
-                                dpg.add_plot_axis(dpg.mvXAxis, label="x", tag="heat_x")
-                                dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="heat_y")
-                                dpg.add_heat_series(np.zeros((100,100)),100,100,
-                                                    scale_min=0,scale_max=1000,
-                                                    parent="heat_y",label="heatmap",
-                                                    tag="heat_series",format='')
-                                dpg.add_drag_point(color=(204,36,29,122),parent="plot",
-                                                        callback=cursor_drag,
-                                                        default_value=(0.5,0.5),
-                                                        tag="cc")
-                                dpg.add_drag_line(color=(204,36,29,122),parent="plot",
-                                                        callback=cursor_drag,
-                                                        default_value=0.5,vertical=True,
-                                                        tag="cx")
-                                dpg.add_drag_line(color=(204,36,29,122),parent="plot",
-                                                        callback=cursor_drag,
-                                                        default_value=0.5,vertical=False,
-                                                        tag="cy")
-                                dpg.bind_colormap("plot",dpg.mvPlotColormap_Viridis)
-
-                        with dpg.child_window(width=-0,height=-300):
-                            with dpg.group(horizontal=True):
-                                dpg.add_colormap_scale(min_scale=0,max_scale=1000,
-                                                        width=100,height=-1,tag="colormap",
-                                                        colormap=dpg.mvPlotColormap_Viridis)
-                                with dpg.plot(label="Histogram", width=-1,height=-1) as histogram:
-                                    dpg.bind_font("plot_font")
-                                    dpg.add_plot_axis(dpg.mvXAxis,label="Occurance",tag="hist_x")
-                                    dpg.add_plot_axis(dpg.mvYAxis,label="Counts",tag="hist_y")
-                                    dpg.add_area_series([0],[0],parent="hist_x",
-                                                        fill=[120,120,120,120],tag="histogram")
-                                    dpg.add_drag_line(callback=set_scale,default_value=0,
-                                                        parent=histogram,tag="line1",vertical=False)
-                                    dpg.add_drag_line(callback=set_scale,default_value=0,
-                                                        parent=histogram,tag="line2",vertical=False)
-                    with dpg.child_window(width=-0,height=-0):
+                    galvo_plot.parent = dpg.last_item()
+                    galvo_plot.height = -330
+                    galvo_plot.scale_width = 335
+                    galvo_plot.make_gui()
+                    with dpg.child_window(width=-0,height=320):
                         with dpg.plot(label="Count Rate",width=-1,height=300,tag="count_plot2"):
                             dpg.bind_font("plot_font") 
                             # REQUIRED: create x and y axes
@@ -1834,7 +1726,7 @@ cavity_position = fpga.get_cavity()
 jpe_position = fpga.get_jpe_pzs()
 obj_position = obj.position
 galvo_tree["Galvo/Position"] = galvo_position
-set_cursor(*galvo_position)
+galvo_plot.set_cursor(galvo_position)
 pzt_tree["Cavity/Position"] = cavity_position[0]
 pzt_tree["JPE/Z Position"] = jpe_position[2]
 pzt_tree["JPE/XY Position"] = jpe_position[:2]

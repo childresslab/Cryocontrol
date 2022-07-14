@@ -65,7 +65,6 @@ class DummyFIFO():
         self._x_sigmas = np.random.uniform(0.2,0.4,self._num_points)
         self._y_sigmas = np.random.uniform(0.2,0.4,self._num_points)
         self._z_sigmas = np.random.uniform(0.05,0.1,self._num_points)
-        print(self._x_positions)
     def stop(self):
         pass
 
@@ -84,7 +83,6 @@ class DummyFIFO():
         xpos = galvo_pos[0]*117 - jpe_pos[1]*20*14/1000
         ypos = galvo_pos[1]*117 - jpe_pos[0]*20*14/1000
         zpos = jpe_pos[2]*20*14/1000
-        print(f"{xpos},{ypos},{zpos}")
         value = np.random.poisson(80 * self.fpga.count_time)
         values = _multi_gaussian(xpos,self._x_positions,self._x_sigmas) * _multi_gaussian(ypos,self._y_positions,self._y_sigmas)*_multi_gaussian(zpos,self._z_positions,self._z_sigmas)
         value += np.random.poisson(np.sum(self._amplitudes*values) * self.fpga.count_time)

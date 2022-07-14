@@ -124,10 +124,10 @@ class mvHistPlot():
             self.update_thread.run()
 
     def update_func(self):
-            dpg.set_value(f"{self.label}_heat_series", [self.data,[0.0,1.0],[],[],[]])
-            self.update_histogram()
-            if self.autoscale:
-                self.autoscale_plots()
+        dpg.set_value(f"{self.label}_heat_series", [self.data,[0.0,1.0],[],[],[]])
+        self.update_histogram()
+        if self.autoscale:
+            self.autoscale_plots()
 
     def update_histogram(self):
         data = self.data
