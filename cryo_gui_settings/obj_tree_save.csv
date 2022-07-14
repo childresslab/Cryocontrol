@@ -1,5 +1,5 @@
-Objective/Set Position (um),0.0
-Objective/Current Position (um),0.0
+Objective/Set Position (um),-0.0
+Objective/Current Position (um),-0.0
 Objective/Limits (um),[-8000.0, 8000.0, 0.0, 0.0]
 Objective/Max Move (um),100.0
 Objective/Rel. Step (um),5.0
