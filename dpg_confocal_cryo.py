@@ -1,4 +1,5 @@
 from json import tool
+from typing import Callable
 import dearpygui.dearpygui as dpg
 import numpy as np
 from time import sleep,time
@@ -465,10 +466,10 @@ def plot_counts(*args):
     dpg.set_value('counts_series',[rdpg.offset_timezone(counts_data['time']),counts_data['counts']])
     dpg.set_value('avg_counts_series',[rdpg.offset_timezone(avg_time),avg_counts])
     dpg.set_value('AI1_series',[rdpg.offset_timezone(counts_data['time']),counts_data['AI1']])
-    dpg.set_value('counts_series2',[rdpg.offset_timezone(counts_data['time']),counts_data['counts']])
-    dpg.set_value('avg_counts_series2',[rdpg.offset_timezone(avg_time),avg_counts])
-    dpg.set_value('counts_series3',[rdpg.offset_timezone(counts_data['time']),counts_data['counts']])
-    dpg.set_value('avg_counts_series3',[rdpg.offset_timezone(avg_time),avg_counts])
+    # dpg.set_value('counts_series2',[rdpg.offset_timezone(counts_data['time']),counts_data['counts']])
+    # dpg.set_value('avg_counts_series2',[rdpg.offset_timezone(avg_time),avg_counts])
+    # dpg.set_value('counts_series3',[rdpg.offset_timezone(counts_data['time']),counts_data['counts']])
+    # dpg.set_value('avg_counts_series3',[rdpg.offset_timezone(avg_time),avg_counts])
     # Print the count rate in the count rate window.
     draw_count()
 
@@ -480,7 +481,10 @@ def draw_count(*args):
     Red critical warning for above 10 million
     """
     val = counts_data['counts'][-1]
-    dpg.set_value("count_rate",f"{val:g}")
+    if val > 1E6:
+        dpg.set_value("count_rate",f"{val:0.2G}")
+    else:
+        dpg.set_value("count_rate",f"{val:0.0f}")
     if val > 1E7:
         dpg.configure_item("count_rate",color=[255,0,0])
     elif val > 1E6:
@@ -772,6 +776,7 @@ def single_optimize_run():
 ######################
 # Objective Scanning #
 ######################
+# Initialize the objective hist plot, which contains the heatmap and histogram of the data.
 obj_plot = mvHistPlot("Obj. Plot",False,None,True,False,1000,0,300,50,'viridis',True,0,1E9,50,50)
 
 # NOTE:
@@ -779,10 +784,28 @@ obj_plot = mvHistPlot("Obj. Plot",False,None,True,False,1000,0,300,50,'viridis',
 # are physically upwards in the cryostat.
 # Here, we have opted to invert that, such that a more positive value
 # is upwards in the cryo, such that plotting and moving makes more sense.
-def obj_scan_func(galvo_axis='y'):
+def obj_scan_func(galvo_axis:str='x') -> Callable:
+    """Generates the functino which we use to scan over the objective and glavo
+
+    Parameters
+    ----------
+    galvo_axis : str, optional
+        Which axis of the galvo we should scan, keeping the other fixed, by default 'x'
+
+    Returns
+    -------
+    Callable
+        Function which we use to scan the objective and galvo.
+
+    Raises
+    ------
+    ValueError
+        If an incorrect axis is requested, this should never happen.
+    """
     if galvo_axis not in ['x','y']:
         raise ValueError("Axis must be 'x' or 'y'")
     if galvo_axis=='y':
+        # Make the function which scans the z of the objective and the y of the galvo.
         def func(z,y):
             log.debug(f"Set galvo y to {y} V.")
             log.debug(f"Set obj. position to {z} um.")
@@ -793,6 +816,7 @@ def obj_scan_func(galvo_axis='y'):
             return count
         return func
     if galvo_axis=='x':
+        # Make the function which scans the z of the objective and the x of the galvo.
         def func(z,x):
             log.debug(f"Set galvo x to {x} V.")
             log.debug(f"Set obj. position to {z} um.")
@@ -802,13 +826,25 @@ def obj_scan_func(galvo_axis='y'):
             log.debug(f"Got count rate of {count}.")
             return count
         return func
+
+# Initialize the objective scanner object.
 obj_scan = Scanner(obj_scan_func('x'),[0,0],[1,1],[50,50],[1],[],float,['y','x'],default_result=-1)
 
-
 def start_obj_scan(sender,app_data,user_data):
+    """
+    Take care of setting up and running an objective scan.
+    Starts by cancelling any counting.
+    Then setups up the scanner from the GUI values
+    Following that, it defines the functions that the scanner will run.
+    Then it asynchronously runs the scan.
+    """
+    # Check if we are starting a scan or aborting one.
     if not dpg.get_value("obj_scan"):
         return -1
+    # Cancel the counting if that's ongoing.
     abort_counts()
+
+    # Get paramters from the GUI and set the scanner object up.
     obj_steps = obj_tree["Scan/Obj./Steps"]
     obj_center = obj_tree["Scan/Obj./Center (um)"]
     obj_span = obj_tree["Scan/Obj./Span (um)"]
@@ -820,6 +856,11 @@ def start_obj_scan(sender,app_data,user_data):
     obj_scan.spans = [obj_span,galv_span]
     
     def init():
+        """
+        The scan initialization function.
+        Setsup the galvo and plots.
+        """
+        
         fpga.set_ao_wait(obj_tree["Scan/Wait Time (ms)"],write=False)
         pos = obj_scan._get_positions()
         xmin = np.min(pos[1])
@@ -864,6 +905,9 @@ def start_obj_scan(sender,app_data,user_data):
     return obj_scan.run_async()
 
 def save_obj_scan(*args):
+    """
+    Saves the objective scan data, using the Scanners built in saving method.
+    """
     path = Path(dpg.get_value("save_dir"))
     filename = dpg.get_value("save_obj_file")
     path /= filename
@@ -872,6 +916,15 @@ def save_obj_scan(*args):
     obj_scan.save_results(str(path),as_npz=as_npz,header=header)
 
 def toggle_objective(sender,app_data,user_data):
+    """
+    Callback for initializing the objective.
+    Uses the app_data, i.e. new checkmar value to check if we initialize
+    or deinitialize.
+
+    Parameters
+    ----------
+    See standard DPG callback parameters.
+    """
     if app_data:
         obj.initialize()
         obj_tree["Objective/Status"] = "Initialized"
@@ -1381,7 +1434,7 @@ rdpg.initialize_dpg("Cryocontrol",docking=False)
 ###############
 # Main Window #
 ###############
-with dpg.window(label="Count Rate", tag="count_window"):
+with dpg.window(label="Count Rate", tag="count_window",pos=[0,750],width=425):
     dpg.add_text('0',tag="count_rate",parent="count_window")
     dpg.bind_item_font("count_rate","massive_font")
 
@@ -1553,12 +1606,19 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                             # REQUIRED: create x and y axes
                             dpg.add_plot_axis(dpg.mvXAxis, label="x", time=True, tag="count_x2")
                             dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="count_y2")
+                            dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="count_AI12")
                             dpg.add_line_series(rdpg.offset_timezone(counts_data['time']),
                                                 counts_data['counts'],
                                                 parent='count_y2',label='counts', tag='counts_series2')
                             dpg.add_line_series(rdpg.offset_timezone(counts_data['time']),
                                                 counts_data['counts'],
                                                 parent='count_y2',label='avg. counts', tag='avg_counts_series2')
+                            dpg.add_line_series(rdpg.offset_timezone(counts_data['time']),
+                                                counts_data['AI1'],
+                                                parent='count_AI12',label='AI1', tag='AI1_series2')
+                            dpg.set_item_source('counts_series2','counts_series')
+                            dpg.set_item_source('avg_counts_series2','avg_counts_series')
+                            dpg.set_item_source('AI1_series2','AI1_series')
                             dpg.add_plot_legend()
         #################
         # Optimizer Tab #
@@ -1666,12 +1726,19 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                                     # REQUIRED: create x and y axes
                                     dpg.add_plot_axis(dpg.mvXAxis, label="x", time=True, tag="count_x3")
                                     dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="count_y3")
+                                    dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="count_AI13")
                                     dpg.add_line_series(rdpg.offset_timezone(counts_data['time']),
                                                         counts_data['counts'],
                                                         parent='count_y3',label='counts', tag='counts_series3')
                                     dpg.add_line_series(rdpg.offset_timezone(counts_data['time']),
                                                         counts_data['counts'],
                                                         parent='count_y3',label='avg. counts', tag='avg_counts_series3')
+                                    dpg.add_line_series(rdpg.offset_timezone(counts_data['time']),
+                                                        counts_data['AI1'],
+                                                        parent='count_AI13',label='AI1', tag='AI1_series3')
+                                    dpg.set_item_source('counts_series3','counts_series')
+                                    dpg.set_item_source('avg_counts_series3','avg_counts_series')
+                                    dpg.set_item_source('AI1_series3','AI1_series')
                                     dpg.add_plot_legend()
         #############
         # Piezo Tab #

@@ -1,18 +1,16 @@
 Cavity/Position,0.0
-Scan/Wait Time (ms),1
-Scan/Count Time (ms),1
-Scan/Cavity/Center,0
-Scan/Cavity/Span,16
-Scan/Cavity/Steps,20
-Scan/JPE/Center,[0, 0, 0, 0]
-Scan/JPE/Span,[40, 40, 0, 0]
-Scan/JPE/Steps,[10, 10, 0, 0]
+Scan/Wait Time (ms),10.0
+Scan/Count Time (ms),5.0
+Scan/Cavity/Center,0.0
+Scan/Cavity/Span,16.0
+Scan/Cavity/Steps,15
+Scan/JPE/Center,[2.7140142917633057, 2.5512943267822266, 0.0, 0.0]
+Scan/JPE/Span,[5.0, 5.0, 0.0, 0.0]
+Scan/JPE/Steps,[16, 16, -1, -1]
 Plot/Autoscale,True
-Plot/N Bins,15
+Plot/N Bins,50
 Plot/Update Every Point,True
-Plot/Deinterleave,True
+Plot/Deinterleave,False
 Plot/Reverse,True
 Plot/3D/Slice Index,0
-Plot/3D/Deinterleave,False
-Plot/3D/Reverse,True
-Plot/Slice Index,0
+Plot/3D/Reducing Func.,'Slice'
