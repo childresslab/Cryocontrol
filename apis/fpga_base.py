@@ -249,7 +249,7 @@ class NiFPGA():
         if chns is None:
             chns = list(range(self._n_AI))
         try:
-            volts = [_bits_to_volts(self._fpga.registers[f"AI{chn}"],
+            volts = [_bits_to_volts(self._fpga.registers[f"AI{chn}"].read(),
                                     self._vmax, self._bit_depth) 
                         for chn in chns]
         except:

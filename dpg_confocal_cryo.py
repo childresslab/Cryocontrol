@@ -886,6 +886,7 @@ def toggle_objective(sender,app_data,user_data):
         pos = -obj.position
         obj_tree["Objective/Current Position (um)"] = pos
         obj_tree["Objective/Set Position (um)"] = pos
+        obj_tree["Objective/Limits (um)"] = [obj.soft_lower,obj.soft_upper]
         set_objective_params()
     else:
         obj.deinitialize()
@@ -1835,16 +1836,13 @@ pzt_tree.load()
 galvo_position = fpga.get_galvo()
 cavity_position = fpga.get_cavity()
 jpe_position = fpga.get_jpe_pzs()
-obj_position = obj.position
 galvo_tree["Galvo/Position"] = galvo_position
 galvo_plot.set_cursor(galvo_position)
 pzt_tree["Cavity/Position"] = cavity_position[0]
 pzt_tree["JPE/Z Position"] = jpe_position[2]
 pzt_tree["JPE/XY Position"] = jpe_position[:2]
 pzt_tree["JPE/Z Volts"] = pz_conv.zs_from_cart(jpe_position)
-obj_tree["Objective/Current Position (um)"] = obj_position
-obj_tree["Objective/Set Position (um)"] = obj_position
-obj_tree["Objective/Limits (um)"] = [obj.soft_lower,obj.soft_upper]
+
 guess_pzt_times()
 guess_galvo_time()
 guess_obj_time()
