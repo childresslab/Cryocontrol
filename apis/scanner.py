@@ -7,6 +7,8 @@ from warnings import warn
 from pathlib import Path
 from threading import Thread
 
+from apis.dummy import objective_dummy
+
 class Scanner():
     """Class for running a function with parameters swept over a grid. 
        Allows for snaking of parameters, as well
@@ -445,12 +447,15 @@ class Scanner():
                 result = self._func(*position)
                 results[index] = result
                 if self._abort_func(I,Imax,index,position,result):
-                    return results
+                    break
                 self._prog_func(I, Imax, index, position, result)
             else:
                 completed = True
         except KeyboardInterrupt:
             warn("Caught Keyboard Intterup, aborting scan.")
+        except Exception as e:
+            self._finish_func(results,completed)
+            raise(e)
         
         self._finish_func(results, completed)
 
@@ -513,6 +518,7 @@ class Scanner():
         """
         if isinstance(filename, str):
             filename = Path(filename)
+        filename.parent.mkdir(parents=True, exist_ok=True)
         filename = _safe_file_name(filename)
         if not self._has_run:
             raise RuntimeError("Scan must be run before saving results")
@@ -525,14 +531,14 @@ class Scanner():
         positions = self._prev_positions
         if as_npz:
             np.savez(filename, res=results, 
-                               pos=np.array(positions),
+                               pos=np.array(positions,dtype=object),
                                head=np.array(header))
         
         else:
             with open(filename.with_suffix(".csv"), 'w') as f:
                 if header != "" or header is not None:
                     nline = len(header.split('\n')) + 2
-                    f.write(f"n_header_lines = {nline}\n")
+                    f.write(f"n_header_lines, {nline}\n")
                     f.write(header)
                     f.write("\n")
                 for label in self.labels:
@@ -586,6 +592,22 @@ class Scanner():
             indices.append(idx)
 
         return positions, indices
+    
+    def gen_header(self,head:str="",foot:str=""):
+        labels = self.labels
+        steps = self.steps
+        spans = self.spans
+        centers = self.centers
+        header = ""
+        if head != "":
+            header += head + "\n"
+        header += f"labels,{repr(labels)}\n"
+        header += f"centers,{repr(centers)}\n"
+        header += f"spans,{repr(spans)}\n"
+        header += f"steps,{repr(steps)}\n"
+        if foot != "":
+            header += foot + "\n"
+        return header
     
 def _safe_file_name(filename : Path):
     """Check the file path for a file with the same name, if one is found

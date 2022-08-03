@@ -86,6 +86,23 @@ class NiFPGA():
             raise
         return 0
 
+    def hard_reset_hardware(self):
+        """ Abort and restarts the fpga session correcting any issues or
+        crashes.
+
+        @return int: error code (0:OK, -1:error)
+        """
+        try:
+            for fifo in self._fpga.fifos.keys():
+                self._fpga.fifos[fifo].stop()
+            self._fpga.abort()
+            self._fpga.reset()
+            self._fpga.close()
+        except:
+            print("Could not close fpga device")
+            raise
+        return 0
+
     # Register Methods
     def read_register(self, name):
         try:

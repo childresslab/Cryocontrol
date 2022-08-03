@@ -2,7 +2,11 @@ from multiprocessing.sharedctypes import Value
 from turtle import color, update, window_width
 import numpy as np
 from apis import rdpg
+from threading import Thread
+import logging as log
 dpg = rdpg.dpg
+log.basicConfig(format='%(levelname)s:%(message)s ', level=log.WARNING)
+
 
 colormaps = {'viridis' : dpg.mvPlotColormap_Viridis,
              'plasma' : dpg.mvPlotColormap_Plasma,
@@ -31,7 +35,7 @@ class mvHistPlot():
                  width=500,
                  height=500,
                  scale_width=300,
-                 bin_width=10,
+                 nbin=50,
                  colormap='viridis',
                  autoscale=True,
                  min_hist=0,
@@ -41,7 +45,7 @@ class mvHistPlot():
                  parent=None):
         self.parent = parent
         self.label = label
-        self.query = query
+        self.queryable = query
         self.equal = equal
         self.cmap = colormap
         self.autoscale = autoscale
@@ -50,27 +54,30 @@ class mvHistPlot():
         self.width = width
         self.height = height
         self.scale_width = scale_width
-        self.bin_width = bin_width
+        self.nbin = nbin
         self.data = np.zeros((rows,cols))
         self.rows = rows
         self.cols = cols
         self.cmap = get_colormap(colormap)
         self.cursor = cursor
+        self.cursor_enabled = cursor
         self.cursor_callback = cursor_callback
+        self.cursor_items = []
+        self.update_thread = Thread(target=self.update_func)
 
-    def make_gui(self,parent):
-        if parent is None:
+    def make_gui(self):
+        if self.parent is None:
             self.parent = dpg.add_window(label="Hist Plot", width=self.width, height=self.height)
         else:
-            self.parent = parent
+            self.parent = self.parent
         scale_width = self.scale_width
         height = self.height
         label = self.label
         equal = self.equal
-        query = self.query
+        query = self.queryable
         rows = self.rows
         cols = self.cols
-        colormap = self.colormap
+        colormap = self.cmap
         cursor = self.cursor
         cursor_callback = self.cursor_callback
 
@@ -111,9 +118,14 @@ class mvHistPlot():
             self.add_cursor(callback=cursor_callback)
 
     def update_plot(self,data):
-        if len(data) != self.rows*self.cols:
-            raise ValueError(f"Length of data array {len(data)} is not equal to num_rows * num_cols = {self.rows*self.cols}. Use set_size() first.")
+        if len(data) != self.rows*self.cols and data.shape[0]*data.shape[1] != self.rows*self.cols:
+            raise ValueError(f"Length of data array {len(data)},{data.shape} is not equal to num_rows * num_cols = {self.rows*self.cols}. Use set_size() first.")
         self.data = data
+        if self.update_thread is None or not self.update_thread.is_alive():
+            self.update_thread = Thread(target=self.update_func)
+            self.update_thread.run()
+
+    def update_func(self):
         dpg.set_value(f"{self.label}_heat_series", [self.data,[0.0,1.0],[],[],[]])
         self.update_histogram()
         if self.autoscale:
@@ -123,7 +135,7 @@ class mvHistPlot():
         data = self.data
         hist_data = self.data[np.where(np.logical_and(data>=self.minhist,
                                                       data<=self.maxhist))]
-        nbins = max([10,int(round((np.nanmax(hist_data)-np.nanmin(hist_data))/self.bin_width))])
+        nbins = self.nbin
         occ,edges = np.histogram(hist_data,bins=nbins)
         xs = [0] + list(np.repeat(occ,2)) + [0,0] 
         ys = list(np.repeat(edges,2)) + [0]
@@ -151,14 +163,19 @@ class mvHistPlot():
             dpg.fit_axis_data(ax)
 
     def add_cursor(self,callback=None):
+        self.cursor_enabled = True
+        self.cursor = True
         if callback is None:
             cursor_callback = self.bind_cursor
         else:
             def cursor_callback(sender,app_data, user_data):
-                self.bind_cursor(sender,app_data,user_data)
-                callback(sender,dpg.get_value(f"{self.label}_cc")[:2])
+                if self.cursor_enabled:
+                    self.bind_cursor(sender,app_data,user_data)
+                    callback(sender,dpg.get_value(f"{self.label}_cc")[:2])
+                else:
+                    self.keep_cursor(sender,app_data,user_data)
                 return
-
+        log.debug("Adding Cursor")
         dpg.add_drag_point(color=(204,36,29,122),parent=f"{self.label}_plot",
                                 callback=cursor_callback,
                                 default_value=(0.5,0.5),
@@ -171,6 +188,7 @@ class mvHistPlot():
                                 callback=cursor_callback,
                                 default_value=0.5,vertical=False,
                                 tag=f"{self.label}_cy")
+        self.cursor_items = [f"{self.label}_cc",f"{self.label}_cx",f"{self.label}_cy"]
 
     def bind_cursor(self,sender,app_data,user_data):
         point = dpg.get_value(f"{self.label}_cc")[:2]
@@ -181,22 +199,49 @@ class mvHistPlot():
         dpg.set_value(f"{self.label}_cx",point[0])
         dpg.set_value(f"{self.label}_cy",point[1])
         dpg.set_value(f"{self.label}_cc",point)
+    
+    def keep_cursor(self,sender,app_data,user_data):
+        if sender == f"{self.label}_cc":
+            point[0] = dpg.get_value(f"{self.label}_cx")
+            point[1] = dpg.get_value(f"{self.label}_cy")
+            dpg.set_value(f"{self.label}_cc",point)
+        else:
+            point = dpg.get_value(f"{self.label}_cc")[:2]
+            dpg.set_value(f"{self.label}_cx",point[0])
+            dpg.set_value(f"{self.label}_cy",point[1])
 
     def set_cursor(self,point):
         dpg.set_value(f"{self.label}_cx",point[0])
         dpg.set_value(f"{self.label}_cy",point[1])
         dpg.set_value(f"{self.label}_cc",point)
 
-    def query(self):
+    def query_plot(self):
         if dpg.is_plot_queried(f"{self.label}_plot"):
             xmin,xmax,ymin,ymax = dpg.get_plot_query_area(f"{self.label}_plot")
-        return xmin,xmax,ymin,ymax
+            return xmin,xmax,ymin,ymax
+        else:
+            return None,None,None,None
 
     def set_size(self,rows,cols):
+        log.warning(f"Setting {self.label}_heat_series size")
         self.rows = rows
         self.cols = cols
-        dpg.configure_item(f"{self.label}_heat_series",rows=rows,cols=cols)
+        dpg.delete_item(f"{self.label}_heat_series")
+        data = np.ones((rows,cols)) * -1.0
+        dpg.add_heat_series(data,self.rows,self.cols,
+                            scale_min=0,scale_max=1000,
+                            parent=f"{self.label}_heat_y",label=f"{self.label} Heatmap",
+                            tag=f"{self.label}_heat_series",format='',)
+        dpg.add_button(tag=f"{self.label}_autofit",parent=f"{self.label}_heat_series",callback=self.autoscale_plots,label="Autoscale")
+        dpg.add_combo(list(colormaps.keys()),parent=f"{self.label}_heat_series",callback=self.context_select_colormap,
+                                  default_value = self.cmap,label="Select Colormap")
+
+        config = dpg.get_item_configuration(f"{self.label}_heat_series")
+        if rows != config['rows'] or cols != config['cols']:
+            raise RuntimeError(f"Error occured while reconfiguring {self.label}_heat_series")
+
     def set_bounds(self,xmin,xmax,ymin,ymax):
+        log.warning(f"Setting {self.label}_heat_series bounds")
         dpg.configure_item(f"{self.label}_heat_series",bounds_min=(xmin,ymin),bounds_max=(xmax,ymax))
 
     def set_colormap(self,colormap:str):
@@ -206,3 +251,13 @@ class mvHistPlot():
 
     def context_select_colormap(self,sender,app_data,user_data):
         self.set_colormap(app_data)
+
+    def disable_cursor(self):
+        self.cursor_enabled = False
+    def enable_cursor(self):
+        self.cursor_enabled = True
+    def toggle_cursor(self):
+        if self.cursor_enabled:
+            self.disable_cursor()
+        else:
+            self.enable_cursor()

@@ -23,32 +23,21 @@ class TreeDict():
                          'list_drag' : {float : dpg.add_drag_floatx,
                                         int   : dpg.add_drag_intx}
                         }
+        self.prefix = f"{parent}_"
         self.savefile = savename
         self.skip_save = []
-        dpg.set_frame_callback(1,lambda _: self.load())
-
 
     def __getitem__(self, key):
-        value = dpg.get_value(key)
+        value = dpg.get_value(f"{self.prefix}{key}")
         if value is None:
-            raise ValueError(f"No value found in tree with {key}")
+            raise ValueError(f"No value found in tree with {self.prefix}{key}")
         return value
 
     def __setitem__(self,key,value):
-        dpg.set_value(key,value)
+        dpg.set_value(f"{self.prefix}{key}",value)
     
-    def add(self, name:str, value:Any, val_type:type = None, 
-            order:int=1, drag:bool = False, save=True, callback = None,
-            node_kwargs:dict = {}, tooltip:str = "", item_kwargs:dict = {}):
-        
-        if callback is None:
-            callback = self.get_save_callback()
-
-        if not save:
-            self.skip_save.append(name)
-
+    def _make_nodes(self,name,node_kwargs):
         hierarchy = name.split('/')
-        #log.debug(f"Item Hierarchy: {hierarchy}")
         layer_dict = self.dict
         # Traverse the hierarchy above the new item, creating
         # layers that don't already exist
@@ -59,21 +48,38 @@ class TreeDict():
                 if i == 0:
                     parent = self.parent
                 else:
-                    parent = '/'.join(hierarchy[:i])
+                    parent = f"{self.prefix}{'/'.join(hierarchy[:i])}"
                 tag = '/'.join(hierarchy[:i+1])
                 node_dict = {'label' : layer,
-                             'tag' : tag,
+                             'tag' : f"{self.prefix}{tag}",
                              'parent' : parent,
                              'default_open' : True}
                 node_dict.update(node_kwargs)
-                log.debug(f"Creating Tree Node {tag}")
+                log.debug(f"Creating Tree Node {self.prefix}{tag}")
                 dpg.add_tree_node(**node_dict)
             layer_dict = layer_dict[layer]
+        return layer_dict
 
+    def add(self, name:str, value:Any, val_type:type = None, 
+            order:int=1, drag:bool = False, save=True, callback = None,
+            node_kwargs:dict = {}, tooltip:str = "", item_kwargs:dict = {}):
+        # Generate a callback that also saves the tree
+        callback = self.get_save_callback(callback)
+
+        # Keep track of which items we don't save
+        if not save:
+            self.skip_save.append(name)
+        # Make sure all the nodes needed exist
+        layer_dict = self._make_nodes(name,node_kwargs)
+        hierarchy = name.split('/')
+        #log.debug(f"Item Hierarchy: {hierarchy}")
+        
+        # Block duplicate entries
         if hierarchy[-1] in layer_dict.keys():
             raise RuntimeError(f"{name} already exists in tree.")
 
-        parent = '/'.join(hierarchy[:-1])
+        # Get the base items parent object and name
+        parent = f"{self.prefix}{'/'.join(hierarchy[:-1])}"
         layer_dict[hierarchy[-1]] = name
 
         # Autodetect type and order of object.
@@ -84,6 +90,7 @@ class TreeDict():
                 if order == 1:
                     order = len(value)
 
+        # What type of object are we making?
         lookup = 'input'
         if drag:
             if order > 1:
@@ -101,8 +108,8 @@ class TreeDict():
             creation_func = self.f_lookup[lookup][val_type]
         except KeyError:
             raise TypeError(f"Type {val_type} not valid for widget style {lookup}.")
-
-        item_dict = {'tag' : name,
+        print(f"{self.prefix}{name}")
+        item_dict = {'tag' : f"{self.prefix}{name}",
                      'default_value' : value,
                      'callback' : callback,
                      }
@@ -112,9 +119,72 @@ class TreeDict():
             item_dict['width'] = -1
         item_dict.update(item_kwargs)
         with dpg.group(horizontal=True,parent=parent):
-            dpg.add_text(f"{hierarchy[-1]}:",tag=f"{name}_label")
+            dpg.add_text(f"{hierarchy[-1]}:",tag=f"{self.prefix}{name}_label")
             #log.debug(f"Creating item {name}")
             creation_func(**item_dict)
+            if tooltip != "":
+                with dpg.tooltip(parent=f"{self.prefix}{name}_label"):
+                    dpg.add_text(tooltip)
+
+    def add_combo(self,name:str,values:list[str],default:str,
+                  save=True,callback=None,
+                  node_kwargs:dict = {}, tooltip:str = "", item_kwargs:dict = {}):
+        callback = self.get_save_callback(callback)
+
+        if not save:
+            self.skip_save.append(name)
+        layer_dict = self._make_nodes(name,node_kwargs)
+        hierarchy = name.split('/')
+        #log.debug(f"Item Hierarchy: {hierarchy}")
+
+        if hierarchy[-1] in layer_dict.keys():
+            raise RuntimeError(f"{name} already exists in tree.")
+
+        parent = f"{self.prefix}{'/'.join(hierarchy[:-1])}"
+        layer_dict[hierarchy[-1]] = name
+
+        item_dict = {'items':values,
+                     'tag' : f"{self.prefix}{name}",
+                     'default_value' : default,
+                     'callback' : callback,
+                    }
+        item_dict.update(item_kwargs)
+        with dpg.group(horizontal=True,parent=parent):
+            dpg.add_text(f"{hierarchy[-1]}:",tag=f"{self.prefix}{name}_label")
+            #log.debug(f"Creating item {name}")
+            dpg.add_combo(**item_dict)
+            if tooltip != "":
+                with dpg.tooltip(name):
+                    dpg.add_text(tooltip)
+
+    def add_radio(self,name:str,values:list[str],default:str,
+                  save=True,callback=None,
+                  node_kwargs:dict = {}, tooltip:str = "", item_kwargs:dict = {}):
+        callback = self.get_save_callback(callback)
+
+        if not save:
+            self.skip_save.append(name)
+        layer_dict = self._make_nodes(name,node_kwargs)
+        hierarchy = name.split('/')
+        #log.debug(f"Item Hierarchy: {hierarchy}")
+
+        if hierarchy[-1] in layer_dict.keys():
+            raise RuntimeError(f"{name} already exists in tree.")
+
+        parent = f"{self.prefix}{'/'.join(hierarchy[:-1])}"
+        layer_dict[hierarchy[-1]] = name
+
+        item_dict = {'items':values,
+                     'tag' : f"{self.prefix}{name}",
+                     'default_value' : default,
+                     'callback' : callback,
+                     'horizontal' : True
+                    }
+        item_dict.update(item_kwargs)
+        with dpg.group(horizontal=True,parent=parent):
+            dpg.add_text(f"{hierarchy[-1]}:",tag=f"{self.prefix}{name}_label")
+            #log.debug(f"Creating item {name}")
+            dpg.add_radio_button(**item_dict)
             if tooltip != "":
                 with dpg.tooltip(name):
                     dpg.add_text(tooltip)
@@ -123,6 +193,7 @@ class TreeDict():
         with dpg.mutex():
             path = Path(self.savefile)
             if not path.exists():
+                path.parent.mkdir(parents=True, exist_ok=True)
                 path.touch()
             values_dict = self.collapse_item_dict(self.dict)
             with path.open(filemode) as f:
@@ -155,8 +226,6 @@ class TreeDict():
                 if entries[0] in self.skip_save:
                     continue
                 try:
-                    self.add(entries[0],literal_eval(entries[1]))
-                except RuntimeError:
                     self[entries[0]] = literal_eval(entries[1])
                 # If we can't evaluate it, just add it as a string.
                 except ValueError:
@@ -164,16 +233,18 @@ class TreeDict():
                         self.add(entries[0],entries[1])
                     except RuntimeError:
                         self[entries[0]] = entries[1]
+                except SystemError:
+                    print(f"Couldn't set {entries[0]} to {entries[1]}")
 
     def get_save_callback(self, user_callback:Callable = None):
         # If no user callback is provided, set the item to simply save the tree
         if user_callback is None:
             return lambda _: self.save()
-        # Otherwise, we first save the tree and then call the callback.
+        # Otherwise, we first call the callback and then save.
         else:
             def save_cb(sender,app_data,user_data):
-                self.save()
                 user_callback(sender,app_data,user_data)
+                self.save()
             return save_cb
 
 # Plot time axes are always in UTC with no way to adjust.
@@ -185,17 +256,68 @@ def offset_timezone(timestamps:list[float]) -> list[float]:
     offset = (dt.utcfromtimestamp(now) - dt.fromtimestamp(now)).seconds
     return [timestamp - offset for timestamp in timestamps]
 
-def initialize_dpg(title:str = "Unamed DPG App"):
-    dpg.create_context()
-    dpg.configure_app(
-        wait_for_input=False, # Can set to true but items may not live update. Lowers CPU usage
-        )
-    dpg.create_viewport(title=title, width=1920//2, height=1080//2, x_pos=1920//4, y_pos=1080//4)
+def make_font_registry():
     with dpg.font_registry():
+        dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 12, default_font=False,tag='small_font')
         dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 18, default_font=True)
         dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Medium.ttf", 18, default_font=False)
         dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Regular.ttf", 18, default_font=False)
-        dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 22, default_font=False, id="plot_font")
+        dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 22, default_font=False, tag="plot_font")
+        dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 48, default_font=False,tag="big_font")
+        dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 96, default_font=False,tag="huge_font")
+        dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 128, default_font=False,tag="massive_font")
+
+def make_disabled_theme():
+    items = [dpg.mvInputText,
+             dpg.mvButton,
+             dpg.mvRadioButton,
+             dpg.mvSliderFloat,
+             dpg.mvSliderInt,
+             dpg.mvDragFloat,
+             dpg.mvDragInt,
+             dpg.mvInputFloat,
+             dpg.mvInputInt,
+             dpg.mvDragFloatMulti,
+             dpg.mvDragIntMulti,
+             dpg.mvSliderFloatMulti,
+             dpg.mvSliderIntMulti,
+             dpg.mvInputIntMulti,
+             dpg.mvInputFloatMulti]
+             #dpg.mvInputDouble,
+             #dpg.mvInputDoubleMulti,
+             #dpg.mvDragDouble,
+             #dpg.mvDragDoubleMulti,
+             #dpg.mvSliderDouble,
+             #dpg.mvSliderDoubleMulti]
+
+    plot_items = [dpg.mvDragPoint,
+                  dpg.mvDragLine]
+    with dpg.theme() as disabled_theme:
+        for item in items:
+            with dpg.theme_component(item, enabled_state=False):
+                dpg.add_theme_color(dpg.mvThemeCol_Text, [122, 122, 122])
+                #dpg.add_theme_color(dpg.mvThemeCol_Button, [122, 122, 122])
+                dpg.add_theme_color(dpg.mvThemeCol_Border, [122, 122, 122])
+
+        for item in plot_items:
+            with dpg.theme_component(item, enabled_state=False):
+                dpg.add_theme_color(dpg.mvPlotCol_Line, [255, 0, 0])
+                dpg.add_theme_color(dpg.mvPlotCol_Fill, [255, 0, 0])
+                dpg.add_theme_color(dpg.mvPlotCol_MarkerFill, [255,0,0])
+                dpg.add_theme_color(dpg.mvPlotCol_MarkerOutline, [255,0,0])
+
+    return disabled_theme
+
+def initialize_dpg(title:str = "Unamed DPG App",docking=False):
+    dpg.create_context()
+    dpg.configure_app(
+        wait_for_input=False, # Can set to true but items may not live update. Lowers CPU usage
+        docking=docking
+        )
+    dpg.create_viewport(title=title, width=1920//2, height=1080//2, x_pos=1920//4, y_pos=1080//4)
+    make_font_registry()
+    disabled_theme = make_disabled_theme()
+    dpg.bind_theme(disabled_theme)
 
 def start_dpg():
     dpg.setup_dearpygui()

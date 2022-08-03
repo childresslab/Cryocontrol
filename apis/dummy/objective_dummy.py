@@ -84,6 +84,19 @@ class DummyObjective():
         self.commands = commands
         self.set_point = None
         self.initialized=False
+
+        self._position = 0
+        self._accel = 0
+        self._dead_band_steps = 0
+        self._dead_band_time = 0
+        self._decel = 100
+        self._feedback = 0
+        self._max_move = 50
+        self._motor_power = 1
+        self._soft_lower = -8000
+        self._soft_upper = 8000
+        self._velocity = 100
+        self._status = 8
         
     def __repr__(self):
         if self.instr is None:
@@ -100,21 +113,21 @@ class DummyObjective():
             raise RuntimeError("Objective not Initialized")
         else:
             #Strip leading # and any whitespace
-            return self.instr.query(f"{self._axis}{msg}")[1:].strip()
+            raise RuntimeError("Don't call this dummy")
 
     def write(self,msg:str) -> None:
         if self.instr is None:
             raise RuntimeError("Objective not Initialized")
         else:
-            self.instr.write(f"{self._axis}{msg}")
+            raise RuntimeError("Don't call this dummy")        
 
     def read(self) -> str:
         if self.instr is None:
             raise RuntimeError("Objective not Initialized")
         else:
             #Strip leading # and any whitespace
-            return self.instr.read()[1:].strip()
-        
+            raise RuntimeError("Don't call this dummy")
+
     @property
     def max_move(self) -> float:
         return self._max_move
@@ -127,54 +140,41 @@ class DummyObjective():
     @property
     def accel(self) -> float:
         """The accel property."""
-        return float(self.query(commands['acceleration']))
+        return self._accel
     @accel.setter
     def accel(self, value:float) -> float:
         self._accel = value
-        self.write(f"{commands['acceleration']} {value}")
 
     @property
     def decel(self) -> float:
         """The decel property."""
-        return float(self.query(commands['deceleration']))
-
+        return self._decel
     @decel.setter
     def decel(self, value:float):
         self._decel = value
-        self.write(f"{commands['deceleration']} {value}")
 
     @property
     def velocity(self) -> float:
         """The velocity property."""
-        return float(self.query(commands['velocity']))
+        return self._velocity
+
     @velocity.setter
     def velocity(self, value:float):
         self._velocity = value
-        self.write(f"{commands['velocity']} {value}")
 
     @property
     def dead_band(self) -> int:
         """The dead_band property."""
-        res = self.query(commands['dead_band']).split(',')
-        return int(res[0]),float(res[1])
+        return int(self._dead_band_steps),float(self._dead_band_time)
 
     @dead_band.setter
     def dead_band(self, steps:int, time:float):
         self._dead_band_steps = steps
         self._dead_band_time = time
-        self.write(f"{commands['dead_band']} {steps},{time}")
 
     @property
     def feedback(self) -> bool:
-        """The feedback property."""
-        value = int(self.query(commands['set_feedback']))
-        if value == 0:
-            return False
-        elif value == 3:
-            return True
-        else:
-            print("Unknown feedback value.")
-            return None
+        return self._feedback
 
     @feedback.setter
     def feedback(self, value:bool):
@@ -183,57 +183,55 @@ class DummyObjective():
             value = 3
         else:
             value = 0
-        self.write(f"{commands['set_feedback']} {value}")
+        self._feedback = value
 
     @property
     def motor_power(self) -> bool:
         """The motor_power property."""
-        return bool(self.query(commands['set_motor']))
+        return self._motor_power
     @motor_power.setter
     def motor_power(self, value:bool):
         self._motor_power = value
-        self.write(f"{commands['set_motor']} {int(value)}")
 
     @property
     def enc_position(self) -> float:
         """The position property."""
-        return float(self.query(commands['position']).split(',')[0]) * 1000 # convert to um from mm
+        return self._position * 1000
     @property
     def position(self) -> float:
         """The position property."""
-        return float(self.query(commands['position']).split(',')[1]) * 1000 # convert to um from mm
+        return self._position * 1000
 
     @property
     def soft_lower(self) -> float:
         """The lower_limit property."""
-        return float(self.query(commands['soft_lower'])) * 1000
+        return self._soft_lower
     @soft_lower.setter
     def soft_lower(self, value:float):
         if self._soft_upper < value:
             raise ObjValueError(f"Lower limit must be less than upper limit = {self.upper_limit}.")
         self._soft_lower = value
-        self.write(f"{commands['soft_lower']} {value/1000}")
 
     @property
     def soft_upper(self) -> float:
         """The upper_limit property."""
-        return float(self.query(commands['soft_upper'])) * 1000
+        return self._soft_upper
     @soft_upper.setter
     def soft_upper(self, value:float):
         if value < self._soft_lower:
             raise ObjValueError(f"Upper limit must be greater than lower limit = {self.lower_limit}.")
         self._soft_upper = value
-        self.write(f"{commands['soft_upper']} {value/1000}")
         
     @property
     def status(self) -> dict[str,bool]:
         """The status property"""
-        byte =  int(self.query(commands['status']))
+        byte = self._status
         status_dict = {'error' : bool(byte&128),
                        'accel'  : bool(byte&64),
                        'const'  : bool(byte&32),
                        'decel'  : bool(byte&16),
                        'idle'   : bool(byte&8),
+
                        'prgrm'  : bool(byte&4),
                        '+lim'   : bool(byte&2),
                        '-lim'   : bool(byte&1)
@@ -242,13 +240,13 @@ class DummyObjective():
 
     @property
     def errors(self) -> list[str]:
-        return self.query(commands['read_errors']).split(',')
+        return ""
 
     def stop(self):
-        self.write(commands['stop'])
+        pass
 
     def estop(self):
-        self.write(commands['estop'])
+        pass
 
     def initialize(self):
         self.instr = DummyInterface()
@@ -270,7 +268,7 @@ class DummyObjective():
             raise ObjValueError(f"Change in position {delta} greater than max = {self.max_move}")
         elif not (self._soft_lower < position < self._soft_upper):
             raise ObjValueError(f"New position {position} outside soft limits [{self._soft_lower},{self._soft_upper}]")
-        self.write(f"{commands['move_abs']} {position/1000}")
+        self._position = position/1000
         self.set_point = position
         if monitor:
             self.monitor_move(monitor_callback)
@@ -281,7 +279,7 @@ class DummyObjective():
             raise ObjValueError(f"Change in position {distance} greater than max = {self.max_move}")
         elif not (self._soft_lower < position < self._soft_upper):
             raise ObjValueError(f"New position {position} outside soft limits [{self._soft_lower},{self._soft_upper}]")
-        self.write(f"{commands['move_rel']} {distance/1000}")
+        self._position = position/1000
         self.set_point = position
         if monitor:
             self.monitor_move(monitor_callback)
@@ -302,7 +300,7 @@ class DummyObjective():
             raise ObjValueError(f"Change in position {distance} greater than max = {self.max_move}")
         elif not (self._soft_lower < self.position < self._soft_upper):
             raise ObjValueError(f"New position {position} outside soft limits [{self._soft_lower},{self._soft_upper}]")
-        self.write(f"{commands['move_abs']} {position/1000}")
+        self._position = position/1000
         self.set_point = position
         if monitor:
             self.monitor_move(monitor_callback)
@@ -331,6 +329,7 @@ class DummyObjective():
         # Setup first iteration of loop
         status = self.status
         set_point = self.set_point
+        abort = False
         while not status['idle']:
             # Throw in try catch to allow for keyboard interrupts of motion
             try:
@@ -356,18 +355,14 @@ class DummyObjective():
         # run callback one more time to ensure we get the final position printed.
         else:
             callback(self.status,self.position,self.set_point)
-        pass
 
     def zero(self):
-        self.write(f"{commands['zero']}")
+        self._position = 0
 
 
 def parse_command(command:str) -> list[str]:
     return list(map(lambda s: s.strip(),command.split(";")))
 
 def get_id(inst) -> str:
-    inst.write("1VER?")
-    sleep(0.5)
-    identity = inst.read()
-    return identity
+    return "dummy"
 

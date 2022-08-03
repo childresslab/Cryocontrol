@@ -4,6 +4,7 @@
 """
 
 import numpy as np
+from time import time
 
 # Functions for converting between fpga bits and volts
 def _volts_to_bits(voltage, vmax, bit_depth):
@@ -42,17 +43,28 @@ def _within(value,vmin,vmax):
         raise ValueError("Range minimum must be less than range maximum.")
     return (value >= vmin and value <= vmax)
 
+def _multi_gaussian(xs,mus,sigmas):
+    return np.exp(-0.5 * (xs-mus)**2 / sigmas**2)
+
 class DummyData():
-    def __init__(self,n=0):
-        if n == 0:
-            n = 1
-        self.data = list((np.abs(np.random.randn(n)*1000)).astype(np.uint32))
+    def __init__(self,values):
+        self.data = values
         self.elements_remaining = 1
 
 class DummyFIFO():
-    def __init__(self):
-        pass
-
+    def __init__(self,fpga):
+        self.fpga = fpga
+        self._num_points = 500
+        self._position_range = [[-10,10], [-10,10], [-2,0]]
+        # Taken from qudi
+        # put randomly distributed NVs in the scanner, first the x,y scan
+        self._x_positions = np.random.uniform(self._position_range[0][0],self._position_range[0][1],self._num_points)
+        self._y_positions = np.random.uniform(self._position_range[1][0],self._position_range[1][1],self._num_points)
+        self._z_positions = np.random.uniform(self._position_range[2][0],self._position_range[2][1],self._num_points)
+        self._amplitudes = np.random.uniform(1E3,5E3,self._num_points)
+        self._x_sigmas = np.random.uniform(0.2,0.4,self._num_points)
+        self._y_sigmas = np.random.uniform(0.2,0.4,self._num_points)
+        self._z_sigmas = np.random.uniform(0.05,0.1,self._num_points)
     def stop(self):
         pass
 
@@ -66,9 +78,16 @@ class DummyFIFO():
         pass
 
     def read(self,n):
-        if n is None:
-            n = 0
-        data = DummyData(n)
+        galvo_pos = self.fpga.get_galvo()
+        jpe_pos = self.fpga.get_jpe_pzs()
+        xpos = galvo_pos[0]*117 - jpe_pos[1]*20*14/1000
+        ypos = galvo_pos[1]*117 - jpe_pos[0]*20*14/1000
+        zpos = jpe_pos[2]*20*14/1000
+        value = np.random.poisson(80 * self.fpga.count_time)
+        values = _multi_gaussian(xpos,self._x_positions,self._x_sigmas) * _multi_gaussian(ypos,self._y_positions,self._y_sigmas)*_multi_gaussian(zpos,self._z_positions,self._z_sigmas)
+        value += np.random.poisson(np.sum(self._amplitudes*values) * self.fpga.count_time)
+        data = DummyData(np.tile(value,n))
+
         return data
 
     def configure(self,size):
@@ -83,7 +102,7 @@ class DummyRegister():
         self.val = val
     
 class DummySession():
-    def __init__(self,vmax,bit_depth):
+    def __init__(self,fpga,vmax,bit_depth):
         self.registers = {'AO0' : DummyRegister(_volts_to_bits(0,vmax,bit_depth)),
                             'AO1' : DummyRegister(_volts_to_bits(0,vmax,bit_depth)),
                             'AO2' : DummyRegister(_volts_to_bits(0,vmax,bit_depth)),
@@ -109,8 +128,8 @@ class DummySession():
                             'Wait after AO set (us)' : DummyRegister(_volts_to_bits(10,vmax,bit_depth)),
                             'Start FPGA 1' : DummyRegister(_volts_to_bits(0,vmax,bit_depth))}
 
-        self.fifos = {'Host to Target DMA' : DummyFIFO(),
-                      'Target to Host DMA' : DummyFIFO()}
+        self.fifos = {'Host to Target DMA' : DummyFIFO(fpga),
+                      'Target to Host DMA' : DummyFIFO(fpga)}
 
 class DummyNiFPGA():
     """ Class that handles the NI FPGA
@@ -132,7 +151,7 @@ class DummyNiFPGA():
         # Open the session with the FPGA card
         print("Opening fpga session")
         try:
-            self._fpga = DummySession(self._vmax,self._bit_depth)
+            self._fpga = DummySession(self,self._vmax,self._bit_depth)
         except:
             print("Couldn't create fpga session")
             raise
