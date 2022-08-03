@@ -1029,7 +1029,7 @@ def do_cav_scan_step():
 
     def finish(results,completed):
         if pzt_tree['Plot/Autoscale']:
-            dpg.set_axis_limits("cav_count_y",np.min(results),np.max(results))
+            dpg.set_axis_limits("cav_count_y",0,np.max(results))
         else:
             dpg.set_axis_limits_auto("cav_count_y")
         set_cav_pos(*position_register["temp_cav_position"])
@@ -1181,10 +1181,10 @@ def start_cav_scan():
     def finish(results,completed):
         dpg.set_value("pzt_cav_scan",False)
         if pzt_tree['Plot/Autoscale']:
-            dpg.set_axis_limits("cav_count_y",np.min(results),np.max(results))
+            dpg.set_axis_limits("cav_count_y",0,np.max(results))
         else:
             dpg.set_axis_limits_auto("cav_count_y")
-        set_cav_pos(*position_register["temp_cav_position"])
+        set_cav_pos(*position_register["temp_cav_position"],write=True)
         if dpg.get_value("pzt_auto_save"):
             save_cav_scan()
         for controls in [galvo_controls,optim_controls,objective_controls,piezo_controls]:
@@ -1341,7 +1341,7 @@ def guess_3d_time():
     time_string = str(dt.timedelta(seconds=scan_time)).split(".")[0]
     pzt_tree["Scan/Estimated Time"] = time_string
 
-def guess_pzt_times():
+def guess_pzt_times(*args):
     guess_piezo_time()
     guess_3d_time()
 
