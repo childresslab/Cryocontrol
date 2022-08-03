@@ -256,13 +256,7 @@ def offset_timezone(timestamps:list[float]) -> list[float]:
     offset = (dt.utcfromtimestamp(now) - dt.fromtimestamp(now)).seconds
     return [timestamp - offset for timestamp in timestamps]
 
-def initialize_dpg(title:str = "Unamed DPG App",docking=False):
-    dpg.create_context()
-    dpg.configure_app(
-        wait_for_input=False, # Can set to true but items may not live update. Lowers CPU usage
-        docking=docking
-        )
-    dpg.create_viewport(title=title, width=1920//2, height=1080//2, x_pos=1920//4, y_pos=1080//4)
+def make_font_registry():
     with dpg.font_registry():
         dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 12, default_font=False,tag='small_font')
         dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 18, default_font=True)
@@ -272,6 +266,58 @@ def initialize_dpg(title:str = "Unamed DPG App",docking=False):
         dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 48, default_font=False,tag="big_font")
         dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 96, default_font=False,tag="huge_font")
         dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 128, default_font=False,tag="massive_font")
+
+def make_disabled_theme():
+    items = [dpg.mvInputText,
+             dpg.mvButton,
+             dpg.mvRadioButton,
+             dpg.mvSliderFloat,
+             dpg.mvSliderInt,
+             dpg.mvDragFloat,
+             dpg.mvDragInt,
+             dpg.mvInputFloat,
+             dpg.mvInputInt,
+             dpg.mvDragFloatMulti,
+             dpg.mvDragIntMulti,
+             dpg.mvSliderFloatMulti,
+             dpg.mvSliderIntMulti,
+             dpg.mvInputIntMulti,
+             dpg.mvInputFloatMulti]
+             #dpg.mvInputDouble,
+             #dpg.mvInputDoubleMulti,
+             #dpg.mvDragDouble,
+             #dpg.mvDragDoubleMulti,
+             #dpg.mvSliderDouble,
+             #dpg.mvSliderDoubleMulti]
+
+    plot_items = [dpg.mvDragPoint,
+                  dpg.mvDragLine]
+    with dpg.theme() as disabled_theme:
+        for item in items:
+            with dpg.theme_component(item, enabled_state=False):
+                dpg.add_theme_color(dpg.mvThemeCol_Text, [122, 122, 122])
+                #dpg.add_theme_color(dpg.mvThemeCol_Button, [122, 122, 122])
+                dpg.add_theme_color(dpg.mvThemeCol_Border, [122, 122, 122])
+
+        for item in plot_items:
+            with dpg.theme_component(item, enabled_state=False):
+                dpg.add_theme_color(dpg.mvPlotCol_Line, [255, 0, 0])
+                dpg.add_theme_color(dpg.mvPlotCol_Fill, [255, 0, 0])
+                dpg.add_theme_color(dpg.mvPlotCol_MarkerFill, [255,0,0])
+                dpg.add_theme_color(dpg.mvPlotCol_MarkerOutline, [255,0,0])
+
+    return disabled_theme
+
+def initialize_dpg(title:str = "Unamed DPG App",docking=False):
+    dpg.create_context()
+    dpg.configure_app(
+        wait_for_input=False, # Can set to true but items may not live update. Lowers CPU usage
+        docking=docking
+        )
+    dpg.create_viewport(title=title, width=1920//2, height=1080//2, x_pos=1920//4, y_pos=1080//4)
+    make_font_registry()
+    disabled_theme = make_disabled_theme()
+    dpg.bind_theme(disabled_theme)
 
 def start_dpg():
     dpg.setup_dearpygui()

@@ -6,11 +6,11 @@ Scan/Cavity/Span,16.0
 Scan/Cavity/Steps,15
 Scan/JPE/Center,[0.12868373095989227, 0.4253098666667938, 0.0, 0.0]
 Scan/JPE/Span,[48.055118560791016, 43.26329803466797, 0.0, 0.0]
-Scan/JPE/Steps,[50, 50, -1, -1]
+Scan/JPE/Steps,[100, 100, -1, -1]
 Plot/Autoscale,True
 Plot/N Bins,50
 Plot/Update Every Point,False
 Plot/Deinterleave,False
 Plot/Reverse,True
-Plot/3D/Slice Index,3
-Plot/3D/Reducing Func.,'Average'
+Plot/3D/Slice Index,10
+Plot/3D/Reducing Func.,'Delta'

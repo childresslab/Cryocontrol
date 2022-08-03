@@ -60,7 +60,9 @@ class mvHistPlot():
         self.cols = cols
         self.cmap = get_colormap(colormap)
         self.cursor = cursor
+        self.cursor_enabled = cursor
         self.cursor_callback = cursor_callback
+        self.cursor_items = []
         self.update_thread = Thread(target=self.update_func)
 
     def make_gui(self):
@@ -161,12 +163,17 @@ class mvHistPlot():
             dpg.fit_axis_data(ax)
 
     def add_cursor(self,callback=None):
+        self.cursor_enabled = True
+        self.cursor = True
         if callback is None:
             cursor_callback = self.bind_cursor
         else:
             def cursor_callback(sender,app_data, user_data):
-                self.bind_cursor(sender,app_data,user_data)
-                callback(sender,dpg.get_value(f"{self.label}_cc")[:2])
+                if self.cursor_enabled:
+                    self.bind_cursor(sender,app_data,user_data)
+                    callback(sender,dpg.get_value(f"{self.label}_cc")[:2])
+                else:
+                    self.keep_cursor(sender,app_data,user_data)
                 return
         log.debug("Adding Cursor")
         dpg.add_drag_point(color=(204,36,29,122),parent=f"{self.label}_plot",
@@ -181,6 +188,7 @@ class mvHistPlot():
                                 callback=cursor_callback,
                                 default_value=0.5,vertical=False,
                                 tag=f"{self.label}_cy")
+        self.cursor_items = [f"{self.label}_cc",f"{self.label}_cx",f"{self.label}_cy"]
 
     def bind_cursor(self,sender,app_data,user_data):
         point = dpg.get_value(f"{self.label}_cc")[:2]
@@ -191,6 +199,16 @@ class mvHistPlot():
         dpg.set_value(f"{self.label}_cx",point[0])
         dpg.set_value(f"{self.label}_cy",point[1])
         dpg.set_value(f"{self.label}_cc",point)
+    
+    def keep_cursor(self,sender,app_data,user_data):
+        if sender == f"{self.label}_cc":
+            point[0] = dpg.get_value(f"{self.label}_cx")
+            point[1] = dpg.get_value(f"{self.label}_cy")
+            dpg.set_value(f"{self.label}_cc",point)
+        else:
+            point = dpg.get_value(f"{self.label}_cc")[:2]
+            dpg.set_value(f"{self.label}_cx",point[0])
+            dpg.set_value(f"{self.label}_cy",point[1])
 
     def set_cursor(self,point):
         dpg.set_value(f"{self.label}_cx",point[0])
@@ -233,3 +251,13 @@ class mvHistPlot():
 
     def context_select_colormap(self,sender,app_data,user_data):
         self.set_colormap(app_data)
+
+    def disable_cursor(self):
+        self.cursor_enabled = False
+    def enable_cursor(self):
+        self.cursor_enabled = True
+    def toggle_cursor(self):
+        if self.cursor_enabled:
+            self.disable_cursor()
+        else:
+            self.enable_cursor()

@@ -1,4 +1,3 @@
-from json import tool
 from typing import Callable
 import dearpygui.dearpygui as dpg
 import numpy as np
@@ -34,7 +33,7 @@ dpg = rdpg.dpg
 # Remove uneeded plus/minus boxes
 # Documentation
 # Encapsulation
-# Disabling/Enabling of controls during other steps.
+# Disabling/Enabling in a more programmic way.
 #TODO TODO TODO TODO TODO
 
 # Slowly turning into a mess of a file
@@ -74,8 +73,6 @@ def set_galvo(x:float,y:float,write:bool=True) -> None:
         the fpga by quickly pulsing, slightly slower so set to False if 
         your next step is to pulse or count, by default True
     """
-    # Update the actual position
-    fpga.set_galvo(x,y,write=write)
     # If we only changed one axis, get the other's value
     if (x is None or y is None):
         galvo_pos = fpga.get_galvo()
@@ -83,6 +80,8 @@ def set_galvo(x:float,y:float,write:bool=True) -> None:
             x = galvo_pos[0]
         if y is None:
             y = galvo_pos[1]
+    # Update the actual position
+    fpga.set_galvo(x,y,write=write)
     # Update the cursor position
     galvo_plot.set_cursor([x,y])
     # Update the readout position
@@ -156,7 +155,7 @@ def start_scan(sender,app_data,user_data):
     ----------
     Called through DPG callback, no need...
     """
-    if not dpg.get_value('scan'):
+    if not dpg.get_value("galvo_scan"):
         return -1
     abort_counts()
     steps = galvo_tree["Scan/Points"]
@@ -180,13 +179,21 @@ def start_scan(sender,app_data,user_data):
         galvo_plot.set_bounds(xmin,xmax,ymin,ymax)
         # Store the current position of the galvo for reseting later
         position_register["temp_galvo_position"] = fpga.get_galvo()
+        for controls in [galvo_controls,optim_controls,objective_controls,piezo_controls]:
+            for control in controls:
+                if control != "galvo_scan":
+                    dpg.disable_item(control)
+        for param in galvo_params:
+            dpg.disable_item(param)
+        for plot in [galvo_plot,pzt_plot,obj_plot]:
+            plot.disable_cursor()
     
     def abort(i,imax,idx,pos,res):
         """
         Abort callback for the scanner. Just checks if the scan button is still
         checked, allowing for cancelling of the scan.
         """
-        return not dpg.get_value('scan')
+        return not dpg.get_value("galvo_scan")
 
     def prog(i,imax,idx,pos,res):
         """
@@ -219,12 +226,19 @@ def start_scan(sender,app_data,user_data):
         Finish callback for the scanner.
         """
         # Uncheck scan button, indicating that we're done
-        dpg.set_value('scan',False)
+        dpg.set_value("galvo_scan",False)
         # Reset the galvo to it's position at the start of the scan
         set_galvo(*position_register["temp_galvo_position"],write=True)
         # If autosave set, save the scan data.
         if dpg.get_value("auto_save"):
             save_galvo_scan()
+        for controls in [galvo_controls,optim_controls,objective_controls,piezo_controls]:
+            for control in controls:
+                    dpg.enable_item(control)
+        for param in galvo_params:
+            dpg.enable_item(param)
+        for plot in [galvo_plot,pzt_plot,obj_plot]:
+            plot.enable_cursor()
 
     # Setup the scanner
     galvo_scan._init_func = init
@@ -260,7 +274,7 @@ def guess_galvo_time(*args):
     time_string = str(dt.timedelta(seconds=scan_time)).split(".")[0]
     galvo_tree["Scan/Estimated Time"] = time_string
 
-def galvo_cursor_callback(point:list[float]):
+def galvo_cursor_callback(sender,point):
     """Keep the galvo position within range on the cursor.
 
     Parameters
@@ -281,8 +295,7 @@ def galvo_cursor_callback(point:list[float]):
         point[1] = -10
     if point[1] > 10:
         point[1] = 10
-    galvo_tree["Galvo/Position"] = point
-    galvo_plot.set_cursor(point)
+    set_galvo(point[0],point[1])
 
 galvo_plot.cursor_callback = galvo_cursor_callback
 
@@ -390,15 +403,10 @@ def plot_counts(*args):
                                          min(len(counts_data['time']),
                                              count_tree["Counts/Average Points"]))
     # Update all the copies of the count plots.
-    # TODO: Find a way to link/copy the plots so that only one needs to be updated.
     dpg.set_value('counts_series',[rdpg.offset_timezone(counts_data['time']),counts_data['counts']])
     dpg.set_value('avg_counts_series',[rdpg.offset_timezone(avg_time),avg_counts])
     dpg.set_value('AI1_series',[rdpg.offset_timezone(counts_data['time']),counts_data['AI1']])
-    # dpg.set_value('counts_series2',[rdpg.offset_timezone(counts_data['time']),counts_data['counts']])
-    # dpg.set_value('avg_counts_series2',[rdpg.offset_timezone(avg_time),avg_counts])
-    # dpg.set_value('counts_series3',[rdpg.offset_timezone(counts_data['time']),counts_data['counts']])
-    # dpg.set_value('avg_counts_series3',[rdpg.offset_timezone(avg_time),avg_counts])
-    # Print the count rate in the count rate window.
+
     draw_count()
 
 def draw_count(*args):
@@ -497,30 +505,16 @@ def optim_scanner_func(axis='x'):
     if axis == 'x':
         def optim_func(x):
             y = position_register['temp_galvo_position'][1]
-            #TODO: Have this call the set_galvo function instead.
-            log.debug(f"Set galvo to ({x},{y}) V.")
-            fpga.set_galvo(x,y,write=False)
-            galvo_plot.set_cursor([x,y])
-            galvo_tree["Galvo/Position"] = [x,y]
+            set_galvo(x,y)
             count = get_count(optim_tree["Optimizer/Count Time (ms)"])
             log.debug(f"Got count rate of {count}.")
-            if count_tree["Counts/Plot Scan Counts"]:
-                counts_data['counts'].append(count)
-                counts_data['time'].append(datetime.now().timestamp())
             return count
     elif axis == 'y':
         def optim_func(y):
             x = position_register['temp_galvo_position'][0]
-            #TODO: Have this call the set_galvo function instead.
-            log.debug(f"Set galvo to ({x},{y}) V.")
-            fpga.set_galvo(x,y,write=False)
-            galvo_plot.set_cursor([x,y])
-            galvo_tree["Galvo/Position"] = [x,y]
+            set_galvo(x,y)
             count = get_count(optim_tree["Optimizer/Count Time (ms)"])
             log.debug(f"Got count rate of {count}.")
-            if count_tree["Counts/Plot Scan Counts"]:
-                counts_data['counts'].append(count)
-                counts_data['time'].append(datetime.now().timestamp())
             return count
     else:
         raise ValueError(f"Invalid Axis {axis}, must be either 'x' or 'y'.")
@@ -605,6 +599,13 @@ def single_optimize_run():
         dpg.set_value('optim_y_counts',[[0],[0]])
         dpg.set_value('optim_x_fit',[[],[]])
         dpg.set_value('optim_y_fit',[[],[]])
+        for controls in [galvo_controls,optim_controls,objective_controls,piezo_controls]:
+            for control in controls:
+                dpg.disable_item(control)
+        for param in optim_params:
+            dpg.disable_item(param)
+        for plot in [galvo_plot,pzt_plot,obj_plot]:
+            plot.disable_cursor()
 
     def prog_x(i,imax,idx,pos,res):
         """
@@ -692,6 +693,13 @@ def single_optimize_run():
         new_axis = np.linspace(np.min(positions),np.max(positions),1000)
         fit_data = fit_y.eval(fit_y.params,x=new_axis)
         dpg.set_value('optim_y_fit',[new_axis,fit_data])
+        for controls in [galvo_controls,optim_controls,objective_controls,piezo_controls]:
+            for control in controls:
+                dpg.enable_item(control)
+        for param in optim_params:
+            dpg.enable_item(param)
+        for plot in [galvo_plot,pzt_plot,obj_plot]:
+            plot.enable_cursor()
 
     # Setup the y-scanner object.
     galvo_scanner_y._init_func = init_y
@@ -796,8 +804,17 @@ def start_obj_scan(sender,app_data,user_data):
         ymin = np.min(pos[0])
         ymax = np.max(pos[0])
         position_register["temp_obj_position"] = obj.position
+        position_register["temp_galvo_position"] = fpga.get_galvo()
         obj_plot.set_size(int(obj_scan.steps[0]),int(obj_scan.steps[1]))
         obj_plot.set_bounds(xmin,xmax,ymin,ymax)
+        for controls in [galvo_controls,optim_controls,objective_controls,piezo_controls]:
+            for control in controls:
+                if control != "obj_scan":
+                    dpg.disable_item(control)
+        for param in objective_params:
+            dpg.disable_item(param)
+        for plot in [galvo_plot,pzt_plot,obj_plot]:
+            plot.disable_cursor()
     
     def abort(i,imax,idx,pos,res):
         return not dpg.get_value("obj_scan")
@@ -822,8 +839,16 @@ def start_obj_scan(sender,app_data,user_data):
     def finish(results,completed):
         dpg.set_value("obj_scan",False)
         set_obj_abs(position_register["temp_obj_position"])
+        set_galvo(*position_register["temp_galvo_position"])
         if dpg.get_value("auto_save"):
             save_obj_scan()
+        for controls in [galvo_controls,optim_controls,objective_controls,piezo_controls]:
+            for control in controls:
+                dpg.enable_item(control)
+        for param in objective_params:
+            dpg.enable_item(param)
+        for plot in [galvo_plot,pzt_plot,obj_plot]:
+            plot.enable_cursor()
             
     obj_scan._func = obj_scan_func(obj_tree['Scan/Galvo/Axis'])
     obj_scan._init_func = init
@@ -1047,6 +1072,14 @@ def start_xy_scan():
         pzt_plot.set_size(int(jpe_xy_scan.steps[0]),int(jpe_xy_scan.steps[1]))
         pzt_plot.set_bounds(xmin,xmax,ymin,ymax)
         dpg.configure_item("Piezo Scan_heat_series",label="2D Scan")
+        for controls in [galvo_controls,optim_controls,objective_controls,piezo_controls]:
+            for control in controls:
+                if control != "pzt_xy_scan":
+                    dpg.disable_item(control)
+        for param in piezo_params:
+            dpg.disable_item(param)
+        for plot in [galvo_plot,pzt_plot,obj_plot]:
+            plot.disable_cursor()
     
     def abort(i,imax,idx,pos,res):
         return not dpg.get_value("pzt_xy_scan")
@@ -1070,7 +1103,13 @@ def start_xy_scan():
         set_jpe_pos(*position_register["temp_jpe_position"])
         if dpg.get_value("pzt_auto_save"):
             save_xy_scan()
-
+        for controls in [galvo_controls,optim_controls,objective_controls,piezo_controls]:
+            for control in controls:
+                dpg.enable_item(control)
+        for param in piezo_params:
+            dpg.enable_item(param)
+        for plot in [galvo_plot,pzt_plot,obj_plot]:
+            plot.enable_cursor()
     jpe_xy_scan._init_func = init
     jpe_xy_scan._abort_func = abort
     jpe_xy_scan._prog_func = prog
@@ -1113,6 +1152,14 @@ def start_cav_scan():
         else:
             dpg.set_axis_limits_auto("cav_count_x")
         dpg.configure_item("pzt_tree_Plot/3D/Slice Index",max_value=pzt_tree["Scan/Cavity/Steps"]-1)
+        for controls in [galvo_controls,optim_controls,objective_controls,piezo_controls]:
+            for control in controls:
+                if control != "pzt_cav_scan":
+                    dpg.disable_item(control)
+        for param in piezo_params:
+            dpg.disable_item(param)
+        for plot in [galvo_plot,pzt_plot,obj_plot]:
+            plot.disable_cursor()
     
     def abort(i,imax,idx,pos,res):
         return not dpg.get_value("pzt_cav_scan")
@@ -1137,6 +1184,13 @@ def start_cav_scan():
         set_cav_pos(*position_register["temp_cav_position"])
         if dpg.get_value("pzt_auto_save"):
             save_cav_scan()
+        for controls in [galvo_controls,optim_controls,objective_controls,piezo_controls]:
+            for control in controls:
+                dpg.enable_item(control)
+        for param in piezo_params:
+            dpg.enable_item(param)
+        for plot in [galvo_plot,pzt_plot,obj_plot]:
+            plot.enable_cursor()
 
     jpe_cav_scan._init_func = init
     jpe_cav_scan._abort_func = abort
@@ -1198,6 +1252,14 @@ def start_3d_scan():
         pzt_plot.set_bounds(xmin,xmax,ymin,ymax)
         dpg.configure_item("Piezo Scan_heat_series",label="3D Scan")
         dpg.configure_item("pzt_tree_Plot/3D/Slice Index",max_value=pzt_tree["Scan/Cavity/Steps"]-1)
+        for controls in [galvo_controls,optim_controls,objective_controls,piezo_controls]:
+            for control in controls:
+                if control != "pzt_3d_scan":
+                    dpg.disable_item(control)
+        for param in piezo_params:
+            dpg.disable_item(param)
+        for plot in [galvo_plot,pzt_plot,obj_plot]:
+            plot.disable_cursor()
     
     def abort(i,imax,idx,pos,res):
         return not dpg.get_value("pzt_3d_scan")
@@ -1222,6 +1284,13 @@ def start_3d_scan():
         set_cav_pos(*position_register["temp_cav_position"])
         if dpg.get_value("pzt_auto_save"):
             save_xy_scan()
+        for controls in [galvo_controls,optim_controls,objective_controls,piezo_controls]:
+            for control in controls:
+                dpg.enable_item(control)
+        for param in piezo_params:
+            dpg.enable_item(param)
+        for plot in [galvo_plot,pzt_plot,obj_plot]:
+            plot.enable_cursor()
 
     jpe_3D_scan._init_func = init
     jpe_3D_scan._abort_func = abort
@@ -1439,9 +1508,16 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
         #############
         # GALVO TAB #
         #############
+        galvo_controls = ["galvo_tree_Galvo/Position",
+                          "galvo_scan"]
+        galvo_params = ["galvo_tree_Scan/Centers (V)",
+                        "galvo_tree_Scan/Spans (V)",
+                        "galvo_tree_Scan/Points",
+                        "galvo_tree_Scan/Count Time (ms)",
+                        "galvo_tree_Scan/Wait Time (ms)"]
         with dpg.tab(label="Galvo"):
             with dpg.group(horizontal=True):
-                dpg.add_checkbox(tag="scan",label="Scan Galvo", callback=start_scan)
+                dpg.add_checkbox(tag="galvo_scan",label="Scan Galvo", callback=start_scan)
                 dpg.add_button(tag="query_plot",label="Copy Scan Params",callback=get_galvo_range)
                 dpg.add_text("Filename:")
                 dpg.add_input_text(tag="save_galvo_file", default_value="scan.npz", width=200)
@@ -1515,6 +1591,12 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
         #################
         # Optimizer Tab #
         #################
+        optim_controls = ["optimize"]
+        optim_params = ["optim_tree_Optimizer/Count Time (ms)",
+                        "optim_tree_Optimizer/Wait Time (ms)",
+                        "optim_tree_Optimizer/Scan Points",
+                        "optim_tree_Optimizer/Scan Range (XY)",
+                        "optim_tree_Optimizer/Iterations"]
         with dpg.tab(label="Galvo Optimizer"):
             with dpg.group(horizontal=True,width=0):
                 with dpg.child_window(width=400,autosize_x=False,autosize_y=True,tag="optim_tree"):
@@ -1554,6 +1636,20 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
         #################
         # Objective Tab #
         #################
+        objective_controls = ["obj_tree_Objective/Initialize",
+                              "obj_tree_Objective/Set Position (um)",
+                              "obj_tree_Objective/Limits (um)",
+                              "obj_tree_Objective/Max Move (um)",
+                              "obj_scan"]
+        objective_params = ["obj_tree_Scan/Count Time (ms)",
+                            "obj_tree_Scan/Wait Time (ms)",
+                            "obj_tree_Scan/Obj./Center (um)",
+                            "obj_tree_Scan/Obj./Span (um)",
+                            "obj_tree_Scan/Obj./Steps",
+                            "obj_tree_Scan/Galvo/Axis",
+                            "obj_tree_Scan/Galvo/Center (V)",
+                            "obj_tree_Scan/Galvo/Span (V)",
+                            "obj_tree_Scan/Galvo/Steps"]
         with dpg.tab(label="Objective Control"):
             with dpg.group(horizontal=True):
                 dpg.add_checkbox(label="Scan Objective",tag="obj_scan", default_value=False, callback=start_obj_scan)
@@ -1587,8 +1683,6 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                                                                     'max_value':1000})
                     obj_tree.add("Plot/Update Every Point",False)
 
-                    #TESTING
-                    dpg.add_button(callback=lambda *args:obj_plot.add_cursor())
                 with dpg.child_window(width=0,height=0,autosize_y=True):
                     with dpg.group(horizontal=True):
                         with dpg.child_window(width=100):
@@ -1635,6 +1729,21 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
         #############
         # Piezo Tab #
         #############
+        piezo_controls = ["pzt_tree_JPE/Z Position",
+                          "pzt_tree_JPE/XY Position",
+                          "pzt_tree_Cavity/Position",
+                          "pzt_xy_scan",
+                          "pzt_cav_scan",
+                          "pzt_3d_scan"]
+        piezo_params = ["pzt_tree_Scan/Wait Time (ms)",
+                        "pzt_tree_Scan/Count Time (ms)",
+                        "pzt_tree_Scan/Cavity/Center",
+                        "pzt_tree_Scan/Cavity/Span",
+                        "pzt_tree_Scan/Cavity/Steps",
+                        "pzt_tree_Scan/JPE/Center",
+                        "pzt_tree_Scan/JPE/Span",
+                        "pzt_tree_Scan/JPE/Steps"]
+
         with dpg.tab(label="Piezo Control"):
             with dpg.group(horizontal=True):
                 dpg.add_checkbox(tag="pzt_xy_scan",label="Scan XY", callback=start_xy_scan)
