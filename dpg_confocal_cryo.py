@@ -32,9 +32,12 @@ dpg = rdpg.dpg
 #TODO TODO TODO TODO TODO
 # Add tooltips to everything!
 # Remove uneeded plus/minus boxes
+# Tune step value on plus/minus boxes
 # Documentation
 # Encapsulation
 # Disabling/Enabling in a more programmic way.
+# XY Scans, make histograms ignore zeros
+# Histogram autoscale area to only non-zero
 #TODO TODO TODO TODO TODO
 
 # Slowly turning into a mess of a file
@@ -1874,6 +1877,11 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                                     dpg.add_drag_line(tag="cav_count_cut",parent='cav_plot',default_value=0,
                                                       callback=update_pzt_plot)
                                     dpg.add_plot_legend()
+
+##################
+# Initialization #
+##################
+
 # Load in tree values
 count_tree.load()
 galvo_tree.load()
