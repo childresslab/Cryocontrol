@@ -1,18 +1,18 @@
-Objective/Set Position (um),0.0
-Objective/Current Position (um),-0.0
-Objective/Limits (um),[-8000.0, 8000.0, 0.0, 0.0]
+Objective/Set Position (um),940.0
+Objective/Current Position (um),938.5700073242188
+Objective/Limits (um),[-4000.0, 4000.0, 0.0, 0.0]
 Objective/Max Move (um),100.0
-Objective/Rel. Step (um),5.0
+Objective/Rel. Step (um),50.0
 Scan/Count Time (ms),10.0
 Scan/Wait Time (ms),5.0
-Scan/Obj./Center (um),0.0
+Scan/Obj./Center (um),938.5399780273438
 Scan/Obj./Span (um),50.0
-Scan/Obj./Steps,50
+Scan/Obj./Steps,100
 Scan/Galvo/Axis,'x'
-Scan/Galvo/Center (V),0.0
-Scan/Galvo/Span (V),0.05000000074505806
-Scan/Galvo/Steps,50
-Scan/Estimated Time,'0:00:37'
+Scan/Galvo/Center (V),0.01144444104284048
+Scan/Galvo/Span (V),0.10000000149011612
+Scan/Galvo/Steps,100
+Scan/Estimated Time,'0:02:30'
 Plot/Autoscale,True
 Plot/N Bins,50
 Plot/Update Every Point,False

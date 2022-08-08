@@ -115,8 +115,14 @@ def galvo(y:float,x:float) -> float:
         the count rate acquired
     """
     log.debug(f"Set galvo to ({x},{y}) V.")
-    set_galvo(x,y)
+    tick = time()
+    set_galvo(x,y,write=False)
+    tock = time()
+    print(f"setting galvo took {(tock-tick) * 1000} ms")
+    tick = time()
     count = get_count(galvo_tree["Scan/Count Time (ms)"])
+    tock = time()
+    print(f"getting counts took {(tock-tick) * 1000} ms")
     log.debug(f"Got count rate of {count}.")
     return count
 
@@ -137,12 +143,24 @@ def get_count(time:float) -> float:
         The acquired count rate
     """
     count = fpga.just_count(time)
+    draw_count(count)
     log.debug(f"Got count rate of {count}.")
     if count_tree["Counts/Plot Scan Counts"] or dpg.get_value("count"):
         counts_data['counts'].append(count)
         counts_data['AI1'].append(fpga.get_AI_volts([1])[0])
         counts_data['time'].append(datetime.now().timestamp())
     return count
+
+def toggle_AI(sender,user,app):
+    if user:
+        dpg.show_item("AI1_series")
+        dpg.show_item("AI1_series2")
+        dpg.show_item("AI1_series3")
+    else:
+        dpg.hide_item("AI1_series")
+        dpg.hide_item("AI1_series2")
+        dpg.hide_item("AI1_series3")
+
 
 # Base initialization of the galvo scanner object. Using the above `galvo` function
 # for scanning.
@@ -201,7 +219,6 @@ def start_scan(sender,app_data,user_data):
         """
         Progress callback for the scanner. Run after every acquisition point
         """
-        print(idx,pos)
         # update the progress bar of the GUI
         log.debug("Setting Progress Bar")
         dpg.set_value("pb",(i+1)/imax)
@@ -216,7 +233,6 @@ def start_scan(sender,app_data,user_data):
             log.debug("Updating Galvo Scan Plot")
             # Format data for the plot
             plot_data = np.copy(np.flipud(galvo_scan.results))
-            print(plot_data)
             galvo_plot.autoscale = galvo_tree["Plot/Autoscale"]
             galvo_plot.nbin = galvo_tree["Plot/N Bins"]
             galvo_plot.update_plot(plot_data)
@@ -340,14 +356,14 @@ def clear_counts(*args):
     counts_data['AI1'] = []
     counts_data['time'] = []
 
-def moving_average(values:NDArray[np.float],window:int) -> NDArray[np.float]:
+def moving_average(values:NDArray[np.float64],window:int) -> NDArray[np.float64]:
     """
     Simple sliding window moving average. Could potentially be improved with
     weighting or better edge handling.
 
     Parameters
     ----------
-    values : NDArray[np.float]
+    values : NDArray[np.float64]
         The array of values to average over.
     
     window : int
@@ -356,29 +372,29 @@ def moving_average(values:NDArray[np.float],window:int) -> NDArray[np.float]:
 
     Returns
     -------
-    NDArray[np.float]
+    NDArray[np.float64]
         The averaged data.
     """
 
     return np.average(sliding_window_view(values, window_shape = window), axis=1)
 
-def average_counts(times : NDArray[np.float],
-                   counts : NDArray[np.float],
-                   window : int) -> tuple[NDArray[np.float],NDArray[np.float]]:
+def average_counts(times : NDArray[np.float64],
+                   counts : NDArray[np.float64],
+                   window : int) -> tuple[NDArray[np.float64],NDArray[np.float64]]:
     """_summary_
 
     Parameters
     ----------
-    times : NDArray[np.float]
+    times : NDArray[np.float64]
         Time data to be average
-    counts : NDArray[np.float]
+    counts : NDArray[np.float64]
         Counts data to be averaged
     window : int
         Averaging window size
 
     Returns
     -------
-    tuple[NDArray[np.float],NDArray[np.float]]
+    tuple[NDArray[np.float64],NDArray[np.float64]]
         Averaged time and counts data
     """
     avg_times = moving_average(times,window)
@@ -409,16 +425,13 @@ def plot_counts(*args):
     dpg.set_value('avg_counts_series',[rdpg.offset_timezone(avg_time),avg_counts])
     dpg.set_value('AI1_series',[rdpg.offset_timezone(counts_data['time']),counts_data['AI1']])
 
-    draw_count()
-
-def draw_count(*args):
+def draw_count(val):
     """
     Prints the count rate in numbers in the special count rate window.
     Sets the color according to some limits for our equipment.
     Yellow warning for above 1 million
     Red critical warning for above 10 million
     """
-    val = counts_data['counts'][-1]
     if val > 1E6:
         dpg.set_value("count_rate",f"{val:0.2G}")
     else:
@@ -522,15 +535,15 @@ def optim_scanner_func(axis='x'):
         raise ValueError(f"Invalid Axis {axis}, must be either 'x' or 'y'.")
     return optim_func
 
-def fit_galvo_optim(position:NDArray[np.float],counts:NDArray[np.float]) -> lm.model.ModelResult:
+def fit_galvo_optim(position:NDArray[np.float64],counts:NDArray[np.float64]) -> lm.model.ModelResult:
     """
     Fit a quadratic to the given data, for optimizing the galvo position.
 
     Parameters
     ----------
-    position : NDArray[np.float]
+    position : NDArray[np.float64]
         The array containing the position data
-    counts : NDArray[np.float]
+    counts : NDArray[np.float64]
         The array containing the counts data
 
     Returns
@@ -556,7 +569,7 @@ def optimize_galvo(*args):
             single_optimize_run().join()
     # Run this all in an additional thread to avoid freezing the UI
     optim_thread = Thread(target=loop_optim)
-    optim_thread.run()
+    optim_thread.start()
 
 def single_optimize_run():
     """
@@ -746,9 +759,16 @@ def obj_scan_func(galvo_axis:str='x') -> Callable:
         # Make the function which scans the z of the objective and the y of the galvo.
         def func(z,y):
             log.debug(f"Set galvo y to {y} V.")
-            log.debug(f"Set obj. position to {z} um.")
+            obj_move = not (abs(z - obj_tree["Objective/Set Position (um)"]) < 0.01)
+            if obj_move:
+                obj_thread = set_obj_abs(z)
+                log.debug(f"Set obj. position to {z} um.")
             set_galvo(None,y,write=False)
-            set_obj_abs(z)
+            if obj_move:
+                tick = time()
+                obj_thread.join()
+                tock = time()
+                print(f"Waited on obj. for {(tock-tick) * 1000} ms")
             count = get_count(obj_tree["Scan/Count Time (ms)"])
             log.debug(f"Got count rate of {count}.")
             return count
@@ -758,8 +778,16 @@ def obj_scan_func(galvo_axis:str='x') -> Callable:
         def func(z,x):
             log.debug(f"Set galvo x to {x} V.")
             log.debug(f"Set obj. position to {z} um.")
+            obj_move = not (abs(z - obj_tree["Objective/Set Position (um)"]) < 0.01)
+            if obj_move:
+                obj_thread = set_obj_abs(z)
+                log.debug(f"Set obj. position to {z} um.")
             set_galvo(x,None,write=False)
-            set_obj_abs(z)
+            if obj_move:
+                tick = time()
+                obj_thread.join()
+                tock = time()
+                print(f"Waited on obj. for {(tock-tick) * 1000} ms")
             count = get_count(obj_tree["Scan/Count Time (ms)"])
             log.debug(f"Got count rate of {count}.")
             return count
@@ -805,7 +833,7 @@ def start_obj_scan(sender,app_data,user_data):
         xmax = np.max(pos[1])
         ymin = np.min(pos[0])
         ymax = np.max(pos[0])
-        position_register["temp_obj_position"] = obj.position
+        position_register["temp_obj_position"] = -obj.position
         position_register["temp_galvo_position"] = fpga.get_galvo()
         obj_plot.set_size(int(obj_scan.steps[0]),int(obj_scan.steps[1]))
         obj_plot.set_bounds(xmin,xmax,ymin,ymax)
@@ -900,16 +928,19 @@ def set_objective_params(*args):
         obj.max_move = obj_tree["Objective/Max Move (um)"]
         dpg.configure_item('obj_pos_set',min_value=limits[0],max_value=limits[1])
         dpg.configure_item('obj_pos_get',min_value=limits[0],max_value=limits[1])
+        dpg.set_value("obj_pos_set",-obj.position)
+        dpg.set_value("obj_pos_get",-obj.position)
 
 def set_obj_callback(sender,app_data,user_data):
     return set_obj_abs(app_data)
 
 def set_obj_abs(position):
     position = -position
+    log.debug(f"Set objective to {-position}")
     def func():
         obj.move_abs(position,monitor=True,monitor_callback=obj_move_callback)
     t = Thread(target=func)
-    t.run()
+    t.start()
     return t
 
 def obj_step_up(*args):
@@ -917,7 +948,7 @@ def obj_step_up(*args):
         step = obj_tree["Objective/Rel. Step (um)"]
         obj.move_up(step,monitor=True,monitor_callback=obj_move_callback)
     t = Thread(target=func)
-    t.run()
+    t.start()
     return t
 
 def obj_step_down(*args):
@@ -925,7 +956,7 @@ def obj_step_down(*args):
         step = obj_tree["Objective/Rel. Step (um)"]
         obj.move_down(step,monitor=True,monitor_callback=obj_move_callback)
     t = Thread(target=func)
-    t.run()
+    t.start()
     return t
 
 def obj_move_callback(status,position,setpoint):
@@ -1385,6 +1416,9 @@ def set_cav_pos(z,write=False):
     pzt_tree["Cavity/Position"] = z
     log.debug(f"Set cavity to {z} V.")
 
+def man_set_cavity(sender,app_data,user_data):
+    set_cav_pos(app_data,True)
+
 def draw_bounds():
     zpos = pzt_tree['JPE/Z Position']
     bound_points = list(pz_conv.bounds('z',zpos))
@@ -1432,31 +1466,40 @@ def save_cav_scan(*args):
 ############################### UI Building ####################################
 ################################################################################
 rdpg.initialize_dpg("Cryocontrol",docking=False)
+with dpg.theme(tag="avg_count_theme"):
+    with dpg.theme_component(dpg.mvLineSeries):
+        dpg.add_theme_color(dpg.mvPlotCol_Line, (252, 167, 130), category=dpg.mvThemeCat_Plots)
+        dpg.add_theme_style(dpg.mvPlotStyleVar_LineWeight, 6, category=dpg.mvThemeCat_Plots)
 ###############
 # Main Window #
 ###############
-with dpg.window(label="Count Rate", tag="count_window",pos=[0,750],width=425):
-    dpg.add_text('0',tag="count_rate",parent="count_window")
-    dpg.bind_item_font("count_rate","massive_font")
+#with dpg.window(label="Count Rate", tag="count_window",pos=[0,750],width=425):
+#    dpg.add_text('0',tag="count_rate",parent="count_window")
+#    dpg.bind_item_font("count_rate","massive_font")
 
 with dpg.window(label="Cryocontrol", tag='main_window'):
     ##################
     # Persistant Bar #
     ##################
-    # Data Directory
     with dpg.group(horizontal=True):
-        dpg.add_text("Data Directory:")
-        dpg.add_input_text(default_value="X:\\DiamondCloud\\Cryostat Setup", tag="save_dir")
-        dpg.add_button(label="Pick Directory", callback=choose_save_dir)
-    # Counts and Optimization
-    with dpg.group(horizontal=True):
-        dpg.add_checkbox(tag="count", label="Count", callback=start_counts)
-        dpg.add_button(tag="clear_counts", label="Clear Counts",callback=clear_counts)
-        dpg.add_button(tag="optimize", label="Optimize Galvo", callback=optimize_galvo)
-    # Confocal Scan Control
-    with dpg.group(horizontal=True):
-        dpg.add_progress_bar(label="Scan Progress",tag='pb',width=-1)
+        with dpg.child_window(width=-425,height=125):
+            # Data Directory
+            with dpg.group(horizontal=True):
+                dpg.add_text("Data Directory:")
+                dpg.add_input_text(default_value="X:\\DiamondCloud\\Cryostat Setup", tag="save_dir",width=-1)
+                dpg.add_button(label="Pick Directory", callback=choose_save_dir)
+            # Counts and Optimization
+            with dpg.group(horizontal=True):
+                dpg.add_checkbox(tag="count", label="Count", callback=start_counts)
+                dpg.add_button(tag="clear_counts", label="Clear Counts",callback=clear_counts)
+                dpg.add_button(tag="optimize", label="Optimize Galvo", callback=optimize_galvo)
+            # Confocal Scan Control
+            with dpg.group(horizontal=True):
+                dpg.add_progress_bar(label="Scan Progress",tag='pb',width=-1)
 
+        with dpg.child_window(width=425,height=125,no_scrollbar=True):
+            dpg.add_text('0',tag="count_rate",parent="count_window")
+            dpg.bind_item_font("count_rate","massive_font")
     ##############
     # START TABS #
     ##############
@@ -1484,17 +1527,14 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                     count_tree.add("Counts/Plot Scan Counts", True, 
                                    callback=plot_counts,
                                    tooltip="Wether to plot counts acquired during other scanning procedures.")
-                with dpg.child_window(width=-1,autosize_y=True): 
-                    with dpg.theme() as count_series_theme:
-                        with dpg.theme_component(dpg.mvAll):
-                            dpg.add_theme_style(dpg.mvPlotStyleVar_LineWeight, 100, category=dpg.mvThemeCat_Core)
-
+                    count_tree.add("Counts/Show AI1", True, callback=toggle_AI)
+                with dpg.child_window(width=-1,autosize_y=True):
                     with dpg.plot(label="Count Rate",width=-1,height=-1,tag="count_plot"):
                         dpg.bind_font("plot_font") 
                         # REQUIRED: create x and y axes
                         dpg.add_plot_axis(dpg.mvXAxis, label="Time", time=True, tag="count_x")
                         dpg.add_plot_axis(dpg.mvYAxis, label="Counts",tag="count_y")
-                        dpg.add_plot_axis(dpg.mvYAxis,label="Sync", tag="count_AI1")
+                        dpg.add_plot_axis(dpg.mvYAxis,label="Sync", tag="count_AI1",no_gridlines=True)
                         dpg.add_line_series(rdpg.offset_timezone(counts_data['time']),
                                             counts_data['counts'],
                                             parent='count_y',label='counts', tag='counts_series')
@@ -1505,8 +1545,9 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                                             counts_data['AI1'],
                                             parent='count_AI1',label='AI1', tag='AI1_series')
                         dpg.add_plot_legend()
-                        dpg.bind_item_theme("counts_series",count_series_theme)
-                        dpg.bind_item_theme("avg_counts_series",count_series_theme)
+                        dpg.bind_item_theme("counts_series","plot_theme_blue")
+                        dpg.bind_item_theme("avg_counts_series","avg_count_theme")
+                        dpg.bind_item_theme("AI1_series","plot_theme_purple")
                         
         #############
         # GALVO TAB #
@@ -1577,7 +1618,7 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                             # REQUIRED: create x and y axes
                             dpg.add_plot_axis(dpg.mvXAxis, label="x", time=True, tag="count_x2")
                             dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="count_y2")
-                            dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="count_AI12")
+                            dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="count_AI12",no_gridlines=True)
                             dpg.add_line_series(rdpg.offset_timezone(counts_data['time']),
                                                 counts_data['counts'],
                                                 parent='count_y2',label='counts', tag='counts_series2')
@@ -1590,6 +1631,9 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                             dpg.set_item_source('counts_series2','counts_series')
                             dpg.set_item_source('avg_counts_series2','avg_counts_series')
                             dpg.set_item_source('AI1_series2','AI1_series')
+                            dpg.bind_item_theme("counts_series2","plot_theme_blue")
+                            dpg.bind_item_theme("avg_counts_series2","avg_count_theme")
+                            dpg.bind_item_theme("AI1_series2","plot_theme_purple")
                             dpg.add_plot_legend()
         #################
         # Optimizer Tab #
@@ -1659,7 +1703,7 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                 dpg.add_button(tag="query_obj_plot",label="Copy Scan Params",callback=get_obj_range)
                 dpg.add_text("Filename:")
                 dpg.add_input_text(tag="save_obj_file", default_value="scan.npz", width=200)
-                dpg.add_button(tag="save_obj_button", label="Save Scan",callback=save_galvo_scan)
+                dpg.add_button(tag="save_obj_button", label="Save Scan",callback=save_obj_scan)
                 dpg.add_checkbox(tag="auto_save_obj", label="Auto")
             with dpg.group(horizontal=True,width=0):
                 with dpg.child_window(width=400,autosize_x=False,autosize_y=True,tag="obj_tree"):
@@ -1715,7 +1759,7 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                                     # REQUIRED: create x and y axes
                                     dpg.add_plot_axis(dpg.mvXAxis, label="x", time=True, tag="count_x3")
                                     dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="count_y3")
-                                    dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="count_AI13")
+                                    dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="count_AI13",no_gridlines=True)
                                     dpg.add_line_series(rdpg.offset_timezone(counts_data['time']),
                                                         counts_data['counts'],
                                                         parent='count_y3',label='counts', tag='counts_series3')
@@ -1728,6 +1772,9 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                                     dpg.set_item_source('counts_series3','counts_series')
                                     dpg.set_item_source('avg_counts_series3','avg_counts_series')
                                     dpg.set_item_source('AI1_series3','AI1_series')
+                                    dpg.bind_item_theme("counts_series3","plot_theme_blue")
+                                    dpg.bind_item_theme("avg_counts_series3","avg_count_theme")
+                                    dpg.bind_item_theme("AI1_series3","plot_theme_purple")
                                     dpg.add_plot_legend()
         #############
         # Piezo Tab #
@@ -1779,7 +1826,8 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                     pzt_tree.add("Cavity/Position",0.0,
                                  item_kwargs={'min_value':-8,'max_value':8,
                                               'min_clamped':True,'max_clamped':True,
-                                              'on_enter':True})
+                                              'on_enter':True},
+                                 callback=man_set_cavity)
                     pzt_tree.add("Scan/Wait Time (ms)",10.0,callback=guess_pzt_times)
                     pzt_tree.add("Scan/Count Time (ms)",5.0,callback=guess_pzt_times)
                     pzt_tree.add("Scan/Cavity/Center",0.0)
@@ -1842,6 +1890,8 @@ pzt_tree["Cavity/Position"] = cavity_position[0]
 pzt_tree["JPE/Z Position"] = jpe_position[2]
 pzt_tree["JPE/XY Position"] = jpe_position[:2]
 pzt_tree["JPE/Z Volts"] = pz_conv.zs_from_cart(jpe_position)
+toggle_AI(None,count_tree["Counts/Show AI1"], None)
+
 
 guess_pzt_times()
 guess_galvo_time()

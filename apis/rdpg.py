@@ -308,6 +308,28 @@ def make_disabled_theme():
 
     return disabled_theme
 
+def make_plot_themes():
+    with dpg.theme(tag="plot_theme_red"):
+        with dpg.theme_component(dpg.mvLineSeries):
+            dpg.add_theme_color(dpg.mvPlotCol_Line, (37, 148, 148), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_style(dpg.mvPlotStyleVar_LineWeight, 2, category=dpg.mvThemeCat_Plots)
+    with dpg.theme(tag="plot_theme_orange"):
+        with dpg.theme_component(dpg.mvLineSeries):
+            dpg.add_theme_color(dpg.mvPlotCol_Line, (252, 167, 130), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_style(dpg.mvPlotStyleVar_LineWeight, 2, category=dpg.mvThemeCat_Plots)
+    with dpg.theme(tag="plot_theme_blue"):
+        with dpg.theme_component(dpg.mvLineSeries):
+            dpg.add_theme_color(dpg.mvPlotCol_Line, (135,135, 250), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_style(dpg.mvPlotStyleVar_LineWeight, 2, category=dpg.mvThemeCat_Plots)
+    with dpg.theme(tag="plot_theme_green"):
+        with dpg.theme_component(dpg.mvLineSeries):
+            dpg.add_theme_color(dpg.mvPlotCol_Line, (175, 255, 186), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_style(dpg.mvPlotStyleVar_LineWeight, 2, category=dpg.mvThemeCat_Plots)
+    with dpg.theme(tag="plot_theme_purple"):
+        with dpg.theme_component(dpg.mvLineSeries):
+            dpg.add_theme_color(dpg.mvPlotCol_Line, (219, 148, 249), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_style(dpg.mvPlotStyleVar_LineWeight, 2, category=dpg.mvThemeCat_Plots)
+
 def initialize_dpg(title:str = "Unamed DPG App",docking=False):
     dpg.create_context()
     dpg.configure_app(
@@ -317,6 +339,7 @@ def initialize_dpg(title:str = "Unamed DPG App",docking=False):
     dpg.create_viewport(title=title, width=1920//2, height=1080//2, x_pos=1920//4, y_pos=1080//4)
     make_font_registry()
     disabled_theme = make_disabled_theme()
+    make_plot_themes()
     dpg.bind_theme(disabled_theme)
 
 def start_dpg():

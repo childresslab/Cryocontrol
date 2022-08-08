@@ -64,6 +64,7 @@ class mvHistPlot():
         self.cursor_callback = cursor_callback
         self.cursor_items = []
         self.update_thread = Thread(target=self.update_func)
+        self.hist_bins = np.array([0,1])
 
     def make_gui(self):
         if self.parent is None:
@@ -243,6 +244,7 @@ class mvHistPlot():
     def set_bounds(self,xmin,xmax,ymin,ymax):
         log.warning(f"Setting {self.label}_heat_series bounds")
         dpg.configure_item(f"{self.label}_heat_series",bounds_min=(xmin,ymin),bounds_max=(xmax,ymax))
+        self.autoscale_plots()
 
     def set_colormap(self,colormap:str):
         self.cmap = get_colormap(colormap)

@@ -1,4 +1,5 @@
-Counts/Count Time (ms),30
-Counts/Max Points,10000
-Counts/Average Points,23
+Counts/Count Time (ms),10
+Counts/Max Points,1000
+Counts/Average Points,20
 Counts/Plot Scan Counts,True
+Counts/Show AI1,False

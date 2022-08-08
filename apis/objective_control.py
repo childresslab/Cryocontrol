@@ -246,22 +246,26 @@ class Objective():
 
     def move_abs(self,position,monitor=True,monitor_callback=None):
         delta = self.position - position
+        if np.abs(delta) <= 1E-5:
+            return
         if np.abs(delta) > self._max_move:
             raise ObjValueError(f"Change in position {delta} greater than max = {self.max_move}")
         elif not (self._soft_lower < position < self._soft_upper):
             raise ObjValueError(f"New position {position} outside soft limits [{self._soft_lower},{self._soft_upper}]")
-        self.write(f"{commands['move_abs']} {position/1000}")
+        self.write(f"{commands['move_abs']} {position/1000:.6}")
         self.set_point = position
         if monitor:
             self.monitor_move(monitor_callback)
 
     def move_rel(self,distance,monitor=True,monitor_callback=None):
         position = self.position + distance
+        if np.abs(distance) <= 1E-5:
+            return
         if np.abs(distance) > self._max_move:
             raise ObjValueError(f"Change in position {distance} greater than max = {self.max_move}")
         elif not (self._soft_lower < position < self._soft_upper):
             raise ObjValueError(f"New position {position} outside soft limits [{self._soft_lower},{self._soft_upper}]")
-        self.write(f"{commands['move_rel']} {distance/1000}")
+        self.write(f"{commands['move_rel']} {distance/1000:.6}")
         self.set_point = position
         if monitor:
             self.monitor_move(monitor_callback)
@@ -269,23 +273,16 @@ class Objective():
     def move_up(self,distance,monitor=True,monitor_callback=None):
         if distance < 0:
             raise ObjValueError("Move up distance must be positive")
+        if distance <= 1E-5:
+            return
         self.move_rel(-distance,monitor,monitor_callback) #Negative values is going up, absolutely certain, do not change.
     
     def move_down(self,distance,monitor=True,monitor_callback=None):
         if distance < 0:
-            raise ObjValueError("Move up distance must be positive")
+            raise ObjValueError("Move down distance must be positive")
+        if distance <= 1E-5:
+            return
         self.move_rel(distance,monitor,monitor_callback) #Negative values is going up, absolutely certain, do not change.
-
-    def move_abs(self,position,monitor=True,monitor_callback=None):
-        distance = position - self.position
-        if np.abs(distance) > self._max_move:
-            raise ObjValueError(f"Change in position {distance} greater than max = {self.max_move}")
-        elif not (self._soft_lower < self.position < self._soft_upper):
-            raise ObjValueError(f"New position {position} outside soft limits [{self._soft_lower},{self._soft_upper}]")
-        self.write(f"{commands['move_abs']} {position/1000}")
-        self.set_point = position
-        if monitor:
-            self.monitor_move(monitor_callback)
 
     def monitor_move(self, callback=None):
         # Setup a default callback, also servers as example
@@ -311,6 +308,7 @@ class Objective():
         # Setup first iteration of loop
         status = self.status
         set_point = self.set_point
+        abort = False
         while not status['idle']:
             # Throw in try catch to allow for keyboard interrupts of motion
             try:
