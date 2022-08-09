@@ -48,9 +48,9 @@ dpg = rdpg.dpg
 log.basicConfig(format='%(levelname)s:%(message)s ', level=log.DEBUG)
 
 # Setup real control
-log.warning("Using Dummy Controls")
-fpga = fpga_cryo_dummy.DummyCryoFPGA()
-obj = objective_dummy.DummyObjective()
+log.warning("Using Real Controls")
+fpga = CryoFPGA
+obj = Objective
 
 # Setup counts data
 counts_data = {'counts':[0],
