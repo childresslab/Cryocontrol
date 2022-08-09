@@ -5,7 +5,7 @@ from pathlib import Path
 from ast import literal_eval
 
 import logging as log
-log.basicConfig(format='%(levelname)s:%(message)s ', level=log.DEBUG)
+log.basicConfig(format='%(levelname)s:%(message)s ', level=log.INFO)
 
 
 class TreeDict():
