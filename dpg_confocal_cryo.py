@@ -1023,7 +1023,6 @@ def do_cav_scan_step():
     jpe_cav_scan.centers = [centers]
     jpe_cav_scan.spans = [spans]
     cav_data = {}
-    abort_counts()
 
     def init():
         log.debug("Starting cav scan sub.")
@@ -1045,7 +1044,9 @@ def do_cav_scan_step():
         log.debug("Updating Cav Scan Plot")
         cav_data['counts'].append(res)
         cav_data['pos'].append(pos[0])
-        dpg.set_value("cav_counts",[cav_data['pos'],cav_data['counts']])
+        check = pzt_tree["Plot/Update Every Point"] or i + 1 >= imax
+        if check:
+            dpg.set_value("cav_counts",[cav_data['pos'],cav_data['counts']])
         if count_tree["Counts/Plot Scan Counts"]:
             plot_counts()
 
