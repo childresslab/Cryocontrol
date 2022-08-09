@@ -1,8 +1,8 @@
-Objective/Set Position (um),940.0
-Objective/Current Position (um),938.5700073242188
+Objective/Set Position (um),940.0399780273438
+Objective/Current Position (um),940.0700073242188
 Objective/Limits (um),[-4000.0, 4000.0, 0.0, 0.0]
 Objective/Max Move (um),100.0
-Objective/Rel. Step (um),50.0
+Objective/Rel. Step (um),10.0
 Scan/Count Time (ms),10.0
 Scan/Wait Time (ms),5.0
 Scan/Obj./Center (um),938.5399780273438

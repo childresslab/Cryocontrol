@@ -1821,7 +1821,7 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                                  item_kwargs={'min_value':-8,'max_value':8,
                                               'min_clamped':True,'max_clamped':True,
                                               'on_enter':True,'step':0.5},
-                                 callback=man_set_cavity)
+                                 callback=man_set_cavity, save=False)
                     pzt_tree.add("Scan/Wait Time (ms)",10.0,callback=guess_pzt_times,item_kwargs={'step':1})
                     pzt_tree.add("Scan/Count Time (ms)",5.0,callback=guess_pzt_times,item_kwargs={'step':1})
                     pzt_tree.add("Scan/Cavity/Center",0.0, item_kwargs={"step":0})
