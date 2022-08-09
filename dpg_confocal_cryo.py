@@ -49,8 +49,8 @@ log.basicConfig(format='%(levelname)s:%(message)s ', level=log.DEBUG)
 
 # Setup real control
 log.warning("Using Real Controls")
-fpga = CryoFPGA
-obj = Objective
+fpga = CryoFPGA()
+obj = Objective()
 
 # Setup counts data
 counts_data = {'counts':[0],
