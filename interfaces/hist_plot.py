@@ -136,15 +136,11 @@ class mvHistPlot():
         data = self.data
         nbins = self.nbin
         minrange = max(self.minhist,np.min(data))
-        print(minrange)
         maxrange = max(minrange+1,min(self.maxhist,np.max(data)))
-        print(maxrange)
         counts,edges = np.histogram(data,bins=nbins,range=(minrange,maxrange))
         percent = counts/(np.sum(counts)) * 100
         xs = [0] + list(np.repeat(percent,2)) + [0,0] 
         ys = list(np.repeat(edges,2)) + [float(edges[0])]
-        print(xs)
-        print(ys)
         self.hist_bins = edges 
         self.hist_counts = counts
         dpg.set_value(f"{self.label}_histogram",[xs,ys,[],[],[]])

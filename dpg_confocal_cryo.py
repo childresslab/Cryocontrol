@@ -45,7 +45,7 @@ dpg = rdpg.dpg
 # that then combine together into one file. However that requires
 # figuring out how to properly share the instrument/data between files
 # which will be a bit tricky...
-log.basicConfig(format='%(levelname)s:%(message)s ', level=log.DEBUG)
+log.basicConfig(format='%(levelname)s:%(message)s ', level=log.INFO)
 
 # Setup real control
 log.warning("Using Real Controls")
@@ -118,14 +118,8 @@ def galvo(y:float,x:float) -> float:
         the count rate acquired
     """
     log.debug(f"Set galvo to ({x},{y}) V.")
-    tick = time()
     set_galvo(x,y,write=False)
-    tock = time()
-    print(f"setting galvo took {(tock-tick) * 1000} ms")
-    tick = time()
     count = get_count(galvo_tree["Scan/Count Time (ms)"])
-    tock = time()
-    print(f"getting counts took {(tock-tick) * 1000} ms")
     log.debug(f"Got count rate of {count}.")
     return count
 
@@ -768,10 +762,7 @@ def obj_scan_func(galvo_axis:str='x') -> Callable:
                 log.debug(f"Set obj. position to {z} um.")
             set_galvo(None,y,write=False)
             if obj_move:
-                tick = time()
                 obj_thread.join()
-                tock = time()
-                print(f"Waited on obj. for {(tock-tick) * 1000} ms")
             count = get_count(obj_tree["Scan/Count Time (ms)"])
             log.debug(f"Got count rate of {count}.")
             return count
@@ -787,10 +778,7 @@ def obj_scan_func(galvo_axis:str='x') -> Callable:
                 log.debug(f"Set obj. position to {z} um.")
             set_galvo(x,None,write=False)
             if obj_move:
-                tick = time()
                 obj_thread.join()
-                tock = time()
-                print(f"Waited on obj. for {(tock-tick) * 1000} ms")
             count = get_count(obj_tree["Scan/Count Time (ms)"])
             log.debug(f"Got count rate of {count}.")
             return count

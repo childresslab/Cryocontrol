@@ -108,7 +108,6 @@ class TreeDict():
             creation_func = self.f_lookup[lookup][val_type]
         except KeyError:
             raise TypeError(f"Type {val_type} not valid for widget style {lookup}.")
-        print(f"{self.prefix}{name}")
         item_dict = {'tag' : f"{self.prefix}{name}",
                      'default_value' : value,
                      'callback' : callback,
@@ -234,7 +233,7 @@ class TreeDict():
                     except RuntimeError:
                         self[entries[0]] = entries[1]
                 except SystemError:
-                    print(f"Couldn't set {entries[0]} to {entries[1]}")
+                    log.error(f"Couldn't set {entries[0]} to {entries[1]}")
 
     def get_save_callback(self, user_callback:Callable = None):
         # If no user callback is provided, set the item to simply save the tree
