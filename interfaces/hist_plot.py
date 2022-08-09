@@ -107,7 +107,7 @@ class mvHistPlot():
                                             colormap=self.cmap)
                     with dpg.plot(label="Histogram", width=-1,height=-1) as histogram:
                         dpg.bind_font("plot_font")
-                        dpg.add_plot_axis(dpg.mvXAxis,label="Occurance",tag=f"{label}_hist_x")
+                        dpg.add_plot_axis(dpg.mvXAxis,label="Percent",tag=f"{label}_hist_x")
                         dpg.add_plot_axis(dpg.mvYAxis,tag=f"{label}_hist_y")
                         dpg.add_area_series([0],[0],parent=f"{label}_hist_x",
                                             fill=[120,120,120,120],tag=f"{label}_histogram")
@@ -134,14 +134,19 @@ class mvHistPlot():
 
     def update_histogram(self):
         data = self.data
-        hist_data = self.data[np.where(np.logical_and(data>=self.minhist,
-                                                      data<=self.maxhist))]
         nbins = self.nbin
-        occ,edges = np.histogram(hist_data,bins=nbins)
-        xs = [0] + list(np.repeat(occ,2)) + [0,0] 
-        ys = list(np.repeat(edges,2)) + [0]
+        minrange = max(self.minhist,np.min(data))
+        print(minrange)
+        maxrange = max(minrange+1,min(self.maxhist,np.max(data)))
+        print(maxrange)
+        counts,edges = np.histogram(data,bins=nbins,range=(minrange,maxrange))
+        percent = counts/(np.sum(counts)) * 100
+        xs = [0] + list(np.repeat(percent,2)) + [0,0] 
+        ys = list(np.repeat(edges,2)) + [float(edges[0])]
+        print(xs)
+        print(ys)
         self.hist_bins = edges 
-        self.hist_counts = occ
+        self.hist_counts = counts
         dpg.set_value(f"{self.label}_histogram",[xs,ys,[],[],[]])
 
     def set_scale(self,sender,app_data,user_data):
