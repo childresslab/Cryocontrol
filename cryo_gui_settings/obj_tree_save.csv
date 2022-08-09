@@ -9,7 +9,7 @@ Scan/Obj./Center (um),938.5399780273438
 Scan/Obj./Span (um),50.0
 Scan/Obj./Steps,100
 Scan/Galvo/Axis,'x'
-Scan/Galvo/Center (V),0.01144444104284048
+Scan/Galvo/Center (V),0.011444441974163055
 Scan/Galvo/Span (V),0.10000000149011612
 Scan/Galvo/Steps,100
 Scan/Estimated Time,'0:02:30'

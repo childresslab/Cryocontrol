@@ -1,7 +1,7 @@
-Galvo/Position,[0.0035353535786271095, -0.03989899158477783, 0.0, 0.0]
+Galvo/Position,[0.0, 0.0, 0.0, 0.0]
 Plot/Autoscale,True
-Plot/N Bins,100
-Plot/Update Every Point,True
+Plot/N Bins,50
+Plot/Update Every Point,False
 Scan/Centers (V),[0.0, 0.0, 0.0, 0.0]
 Scan/Spans (V),[0.10000000149011612, 0.10000000149011612, 0.0, 0.0]
 Scan/Points,[100, 100, 0, 0]

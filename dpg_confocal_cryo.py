@@ -10,7 +10,7 @@ import datetime as dt
 from pathlib import Path
 import lmfit as lm
 import logging as log
-from apis.dummy import fpga_base_dummy, fpga_cryo_dummy
+from apis.dummy import fpga_base_dummy, fpga_cryo_dummy, objective_dummy
 from numpy.typing import NDArray
 
 from apis.scanner import Scanner
@@ -45,7 +45,7 @@ dpg = rdpg.dpg
 # that then combine together into one file. However that requires
 # figuring out how to properly share the instrument/data between files
 # which will be a bit tricky...
-log.basicConfig(format='%(levelname)s:%(message)s ', level=log.DEBUG)
+log.basicConfig(format='%(levelname)s:%(message)s ', level=log.INFO)
 
 # Setup real control
 log.warning("Using Real Controls")
@@ -61,7 +61,7 @@ position_register = {"temp_galvo_position":fpga.get_galvo()}
 #################
 # Galvo Control #
 #################
-galvo_plot = mvHistPlot("Galvo Plot",True,None,True,True,1000,0,300,50,'viridis',True,0,1E9,50,50)
+galvo_plot = mvHistPlot("Galvo Plot",True,None,True,True,1000,0,300,50,'viridis',True,1,1E9,50,50)
 def set_galvo(x:float,y:float,write:bool=True) -> None:
     """
     Sets the galvo position, keeping track of updating the cursor position
@@ -118,14 +118,8 @@ def galvo(y:float,x:float) -> float:
         the count rate acquired
     """
     log.debug(f"Set galvo to ({x},{y}) V.")
-    tick = time()
     set_galvo(x,y,write=False)
-    tock = time()
-    print(f"setting galvo took {(tock-tick) * 1000} ms")
-    tick = time()
     count = get_count(galvo_tree["Scan/Count Time (ms)"])
-    tock = time()
-    print(f"getting counts took {(tock-tick) * 1000} ms")
     log.debug(f"Got count rate of {count}.")
     return count
 
@@ -731,7 +725,7 @@ def single_optimize_run():
 # Objective Scanning #
 ######################
 # Initialize the objective hist plot, which contains the heatmap and histogram of the data.
-obj_plot = mvHistPlot("Obj. Plot",False,None,True,False,1000,0,300,50,'viridis',True,0,1E9,50,50)
+obj_plot = mvHistPlot("Obj. Plot",False,None,True,False,1000,0,300,50,'viridis',True,1,1E9,50,50)
 
 # NOTE:
 # The bare api of the objective control is setup so that more negative values
@@ -768,10 +762,7 @@ def obj_scan_func(galvo_axis:str='x') -> Callable:
                 log.debug(f"Set obj. position to {z} um.")
             set_galvo(None,y,write=False)
             if obj_move:
-                tick = time()
                 obj_thread.join()
-                tock = time()
-                print(f"Waited on obj. for {(tock-tick) * 1000} ms")
             count = get_count(obj_tree["Scan/Count Time (ms)"])
             log.debug(f"Got count rate of {count}.")
             return count
@@ -787,10 +778,7 @@ def obj_scan_func(galvo_axis:str='x') -> Callable:
                 log.debug(f"Set obj. position to {z} um.")
             set_galvo(x,None,write=False)
             if obj_move:
-                tick = time()
                 obj_thread.join()
-                tock = time()
-                print(f"Waited on obj. for {(tock-tick) * 1000} ms")
             count = get_count(obj_tree["Scan/Count Time (ms)"])
             log.debug(f"Got count rate of {count}.")
             return count
@@ -1007,7 +995,7 @@ def get_obj_range():
 ###################
 # Cavity Scanning #
 ###################
-pzt_plot = mvHistPlot("Piezo Scan",True,None,True,True,1000,0,300,1000,'viridis',True,0,1E12,50,50)
+pzt_plot = mvHistPlot("Piezo Scan",True,None,True,True,1000,0,300,1000,'viridis',True,1,1E12,50,50)
 def set_cav_and_count(z):
     try:
         set_cav_pos(z,write=False)
@@ -1522,7 +1510,7 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                                    item_kwargs={'min_value':1,'min_clamped':True},
                                    tooltip="How long the fpga acquires counts for.")
                     count_tree.add("Counts/Max Points", 100000,
-                                   item_kwargs={'on_enter':True,'min_value':1,'min_clamped':True},
+                                   item_kwargs={'on_enter':True,'min_value':1,'min_clamped':True,'step':100},
                                    tooltip="How many plot points to display before cutting old ones.")
                     count_tree.add("Counts/Average Points", 5, callback=plot_counts,
                                    item_kwargs={'min_value':1,'min_clamped':True},
@@ -1582,29 +1570,31 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                                     callback=man_set_galvo)
                     galvo_tree.add("Plot/Autoscale",False,tooltip="Autoscale the plot at each update")
                     galvo_tree.add("Plot/N Bins",50,item_kwargs={'min_value':1,
-                                                                    'max_value':1000},
+                                                                 'max_value':1000},
                                    tooltip="Number of bins in plot histogram")
                     galvo_tree.add("Plot/Update Every Point",False,
                                    tooltip="Update the plot at every position vs each line, slows down scans.")
                     galvo_tree.add("Scan/Centers (V)",[0.0,0.0],item_kwargs={'min_value':-10,
-                                                                            'max_value':10,
-                                                                            "min_clamped":True,
-                                                                            "max_clamped":True},
+                                                                             'max_value':10,
+                                                                             "min_clamped":True,
+                                                                             "max_clamped":True},
                                     tooltip="Central position of scan in volts.")
                     galvo_tree.add("Scan/Spans (V)", [1.0,1.0],item_kwargs={'min_value':-20,
-                                                                        'max_value':20,
-                                                                        "min_clamped":True,
-                                                                        "max_clamped":True},
+                                                                            'max_value':20,
+                                                                            "min_clamped":True,
+                                                                            "max_clamped":True},
                                     tooltip="Width of scan in volts.")
                     galvo_tree.add("Scan/Points", [100,100],item_kwargs={'min_value':0},
                                 callback=guess_galvo_time,
                                 tooltip="Number of points along the scan axes.")
                     galvo_tree.add("Scan/Count Time (ms)", 10.0, item_kwargs={'min_value':0,
-                                                                            'max_value':1000},
+                                                                              'max_value':1000,
+                                                                              'step':1},
                                 callback=guess_galvo_time,
                                 tooltip="How long the fpga counts at each position.")
                     galvo_tree.add("Scan/Wait Time (ms)", 1.0,item_kwargs={'min_value':0,
-                                                                        'max_value':1000},
+                                                                        'max_value':1000,
+                                                                        "step":1},
                                 callback=guess_galvo_time,
                                 tooltip="How long the fpga waits before counting, after moving.")
                     galvo_tree.add("Scan/Estimated Time", "00:00:00", item_kwargs={'readonly':True},
@@ -1651,13 +1641,13 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
             with dpg.group(horizontal=True,width=0):
                 with dpg.child_window(width=400,autosize_x=False,autosize_y=True,tag="optim_tree"):
                     optim_tree = rdpg.TreeDict('optim_tree','cryo_gui_settings/optim_tree_save.csv')
-                    optim_tree.add("Optimizer/Count Time (ms)", 10.0,item_kwargs={'min_value':1.0,'min_clamped':True},
+                    optim_tree.add("Optimizer/Count Time (ms)", 10.0,item_kwargs={'min_value':1.0,'min_clamped':True,'step':1},
                                    tooltip="How long the fpga counts at each position.")
-                    optim_tree.add("Optimizer/Wait Time (ms)", 10.0,item_kwargs={'min_value':1.0,'min_clamped':True},
+                    optim_tree.add("Optimizer/Wait Time (ms)", 10.0,item_kwargs={'min_value':1.0,'min_clamped':True,'step':1},
                                    tooltip="How long the fpga waits before counting after moving.")
                     optim_tree.add("Optimizer/Scan Points", 50,item_kwargs={'min_value':2,'min_clamped':True},
                                    tooltip="Number of points to scan along each axis.")
-                    optim_tree.add("Optimizer/Scan Range (XY)", 0.1,item_kwargs={'min_value':0.0,'min_clamped':True},
+                    optim_tree.add("Optimizer/Scan Range (XY)", 0.1,item_kwargs={'min_value':0.0,'min_clamped':True,'step':0},
                                    tooltip="Size of scan along each axis in volts.")
                     optim_tree.add("Optimizer/Iterations", 1,item_kwargs={'min_value':1,'min_clamped':True},
                                    tooltip="How many times to rerun the optimization around each new point.")
@@ -1713,20 +1703,20 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                     obj_tree = rdpg.TreeDict('obj_tree','cryo_gui_settings/obj_tree_save.csv')
                     obj_tree.add("Objective/Initialize", False,save=False,callback=toggle_objective)
                     obj_tree.add("Objective/Status","Uninitialized",save=False,item_kwargs={"readonly":True})
-                    obj_tree.add("Objective/Set Position (um)", 100.0,callback=set_obj_callback,item_kwargs={"on_enter":True})
+                    obj_tree.add("Objective/Set Position (um)", 100.0,callback=set_obj_callback,item_kwargs={"on_enter":True,'step':0})
                     obj_tree.add("Objective/Current Position (um)", 100.0,item_kwargs={"readonly":True,'step':0})
                     obj_tree.add("Objective/Limits (um)",[-8000.0,8000.0],callback=set_objective_params,item_kwargs={"on_enter":True})
-                    obj_tree.add("Objective/Max Move (um)", 100.0,callback=set_objective_params,item_kwargs={"on_enter":True})
-                    obj_tree.add("Objective/Rel. Step (um)", 5.0)
-                    obj_tree.add("Scan/Count Time (ms)", 10.0,callback=guess_obj_time,item_kwargs={'min_value':0,'min_clamped':True})
-                    obj_tree.add("Scan/Wait Time (ms)", 5.0,callback=guess_obj_time,item_kwargs={'min_value':0,'min_clamped':True})
-                    obj_tree.add("Scan/Obj./Center (um)",0.0)
-                    obj_tree.add("Scan/Obj./Span (um)",50.0)
-                    obj_tree.add("Scan/Obj./Steps",50,callback=guess_obj_time)
+                    obj_tree.add("Objective/Max Move (um)", 100.0,callback=set_objective_params,item_kwargs={"on_enter":True,'step':1})
+                    obj_tree.add("Objective/Rel. Step (um)", 5.0,item_kwargs={"min_value":0,"min_clamped":True,"step":1})
+                    obj_tree.add("Scan/Count Time (ms)", 10.0,callback=guess_obj_time,item_kwargs={'min_value':0,'min_clamped':True,"step":1})
+                    obj_tree.add("Scan/Wait Time (ms)", 5.0,callback=guess_obj_time,item_kwargs={'min_value':0,'min_clamped':True,"step":1})
+                    obj_tree.add("Scan/Obj./Center (um)",0.0, item_kwargs={"step":0})
+                    obj_tree.add("Scan/Obj./Span (um)",50.0, item_kwargs={"step":0})
+                    obj_tree.add("Scan/Obj./Steps",50,callback=guess_obj_time, item_kwargs={"step":0})
                     obj_tree.add_radio("Scan/Galvo/Axis",['x','y'],'x')
-                    obj_tree.add("Scan/Galvo/Center (V)",0.0)
-                    obj_tree.add("Scan/Galvo/Span (V)",0.05)
-                    obj_tree.add("Scan/Galvo/Steps",50,callback=guess_obj_time)
+                    obj_tree.add("Scan/Galvo/Center (V)",0.0, item_kwargs={"step":0})
+                    obj_tree.add("Scan/Galvo/Span (V)",0.05, item_kwargs={"step":0})
+                    obj_tree.add("Scan/Galvo/Steps",50,callback=guess_obj_time, item_kwargs={"step":0})
                     obj_tree.add("Scan/Estimated Time", "00:00:00", item_kwargs={"readonly":True})
                     obj_tree.add("Plot/Autoscale",False)
                     obj_tree.add("Plot/N Bins",50,item_kwargs={'min_value':1,
@@ -1818,7 +1808,7 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                     pzt_tree.add("JPE/Z Position",0.0,
                                  item_kwargs={'min_value':-6.5,'max_value':0,
                                               'min_clamped':True,'max_clamped':True,
-                                              'on_enter':True},
+                                              'on_enter':True,'step':0.05},
                                               callback=z_pos_callback,save=False)
                     pzt_tree.add("JPE/XY Position",[0.0,0.0],
                                  item_kwargs={'on_enter':True},
@@ -1829,13 +1819,13 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                     pzt_tree.add("Cavity/Position",0.0,
                                  item_kwargs={'min_value':-8,'max_value':8,
                                               'min_clamped':True,'max_clamped':True,
-                                              'on_enter':True},
+                                              'on_enter':True,'step':0.5},
                                  callback=man_set_cavity)
-                    pzt_tree.add("Scan/Wait Time (ms)",10.0,callback=guess_pzt_times)
-                    pzt_tree.add("Scan/Count Time (ms)",5.0,callback=guess_pzt_times)
-                    pzt_tree.add("Scan/Cavity/Center",0.0)
-                    pzt_tree.add("Scan/Cavity/Span",16.0)
-                    pzt_tree.add("Scan/Cavity/Steps",300,callback=guess_pzt_times)
+                    pzt_tree.add("Scan/Wait Time (ms)",10.0,callback=guess_pzt_times,item_kwargs={'step':1})
+                    pzt_tree.add("Scan/Count Time (ms)",5.0,callback=guess_pzt_times,item_kwargs={'step':1})
+                    pzt_tree.add("Scan/Cavity/Center",0.0, item_kwargs={"step":0})
+                    pzt_tree.add("Scan/Cavity/Span",16.0, item_kwargs={"step":0})
+                    pzt_tree.add("Scan/Cavity/Steps",300,callback=guess_pzt_times, item_kwargs={"step":0})
                     pzt_tree.add("Scan/JPE/Center",[0.0,0.0])
                     pzt_tree.add("Scan/JPE/Span",[5.0,5.0])
                     pzt_tree.add("Scan/JPE/Steps",[15,15],callback=guess_pzt_times)
