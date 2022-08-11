@@ -98,7 +98,8 @@ def man_set_galvo(*args):
     Simply calls `set_galvo` with the new position.
     """
     pos = galvo_tree["Galvo/Position"]
-    set_galvo(pos[0],pos[1])
+    write = not dpg.get_value("count")
+    set_galvo(pos[0],pos[1],write=write)
 
 def galvo(y:float,x:float) -> float:
     """
@@ -1370,13 +1371,15 @@ def guess_pzt_times(*args):
 
 def xy_pos_callback(sender,app_data,user_data):
     try:
-        set_jpe_pos(app_data[0],app_data[1],None)
+        write = not dpg.get_value("count")
+        set_jpe_pos(app_data[0],app_data[1],None,write=write)
     except FPGAValueError:
         pass
 
 def z_pos_callback(sender,app_data,user_data):
     try:
-        set_jpe_pos(None,None,app_data)
+        write = not dpg.get_value("count")
+        set_jpe_pos(None,None,app_data,write=write)
     except FPGAValueError:
         pass
 
@@ -1409,7 +1412,8 @@ def set_cav_pos(z,write=False):
     log.debug(f"Set cavity to {z} V.")
 
 def man_set_cavity(sender,app_data,user_data):
-    set_cav_pos(app_data,True)
+    write = not dpg.get_value("count")
+    set_cav_pos(app_data,write=write)
 
 def draw_bounds():
     zpos = pzt_tree['JPE/Z Position']
@@ -1425,7 +1429,8 @@ def xy_cursor_callback(sender,position):
     if not pz_conv.check_bounds(position[0],position[1],zpos):
         pzt_plot.set_cursor(cur_xy)
     else:
-        set_jpe_pos(position[0],position[1],zpos)
+        write = not dpg.get_value("count")
+        set_jpe_pos(position[0],position[1],zpos,write=write)
 pzt_plot.cursor_callback=xy_cursor_callback
 
 def save_xy_scan(*args):
