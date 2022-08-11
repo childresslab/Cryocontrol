@@ -1,9 +1,0 @@
-Galvo/Position,[0.0, 0.0, 0.0, 0.0]
-Plot/Autoscale,True
-Plot/N Bins,50
-Plot/Update Every Point,False
-Scan/Centers (V),[0.0, 0.0, 0.0, 0.0]
-Scan/Spans (V),[0.10000000149011612, 0.10000000149011612, 0.0, 0.0]
-Scan/Points,[100, 100, 0, 0]
-Scan/Count Time (ms),5.0
-Scan/Wait Time (ms),5.0
