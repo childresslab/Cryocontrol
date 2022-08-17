@@ -1,7 +1,7 @@
 import serial as se
 import numpy as np
 import pyvisa as pv
-from logging import getLogger
+from logging import getLogger, DEBUG, INFO
 from pathlib import Path
 from time import sleep
 from warnings import warn
@@ -252,7 +252,8 @@ class Objective():
             raise ObjValueError(f"Change in position {delta} greater than max = {self.max_move}")
         elif not (self._soft_lower < position < self._soft_upper):
             raise ObjValueError(f"New position {position} outside soft limits [{self._soft_lower},{self._soft_upper}]")
-        self.write(f"{commands['move_abs']} {position/1000:.6}")
+        position = float(position)
+        self.write(f"{commands['move_abs']} {position/1000:.6f}")
         self.set_point = position
         if monitor:
             self.monitor_move(monitor_callback)
@@ -265,7 +266,7 @@ class Objective():
             raise ObjValueError(f"Change in position {distance} greater than max = {self.max_move}")
         elif not (self._soft_lower < position < self._soft_upper):
             raise ObjValueError(f"New position {position} outside soft limits [{self._soft_lower},{self._soft_upper}]")
-        self.write(f"{commands['move_rel']} {distance/1000:.6}")
+        self.write(f"{commands['move_rel']} {distance/1000:.6f}")
         self.set_point = position
         if monitor:
             self.monitor_move(monitor_callback)
@@ -364,6 +365,7 @@ class VisaInterface():
         self.model = _model
         _log.debug("Opened device model: {0}".format(_model))
         self._log = getLogger("{0}.{1}".format(__name__, _model))
+        self._log.setLevel(INFO)
 
     def query(self, command:str) -> str:
         commands = parse_command(command)
