@@ -140,7 +140,11 @@ def get_count(time:float) -> float:
     float
         The acquired count rate
     """
-    count = fpga.just_count(time)
+    try:
+        count = fpga.just_count(time)
+    except TimeoutError as e:
+        fpga.write_register('Start FPGA 1', 0)
+        raise e
     draw_count(count)
     log.debug(f"Got count rate of {count}.")
     if count_tree["Counts/Plot Scan Counts"] or dpg.get_value("count"):
@@ -162,7 +166,7 @@ def toggle_AI(sender,user,app):
 
 # Base initialization of the galvo scanner object. Using the above `galvo` function
 # for scanning.
-galvo_scan = Scanner(galvo,[0,0],[1,1],[50,50],[1],[],float,['y','x'],default_result=-1)
+galvo_scan = Scanner(galvo,[0,0],[1,1],[50,50],[],[],float,['y','x'],default_result=-1)
 
 def start_scan(sender,app_data,user_data):
     """
@@ -311,7 +315,8 @@ def galvo_cursor_callback(sender,point):
         point[1] = -10
     if point[1] > 10:
         point[1] = 10
-    set_galvo(point[0],point[1])
+    write = not dpg.get_value("count")
+    set_galvo(point[0],point[1],write=write)
 
 galvo_plot.cursor_callback = galvo_cursor_callback
 
@@ -786,7 +791,7 @@ def obj_scan_func(galvo_axis:str='x') -> Callable:
         return func
 
 # Initialize the objective scanner object.
-obj_scan = Scanner(obj_scan_func('x'),[0,0],[1,1],[50,50],[1],[],float,['y','x'],default_result=-1)
+obj_scan = Scanner(obj_scan_func('x'),[0,0],[1,1],[50,50],[],[],float,['z','x'],default_result=-1)
 
 def start_obj_scan(sender,app_data,user_data):
     """
@@ -971,7 +976,7 @@ def obj_move_callback(status,position,setpoint):
     dpg.set_value("obj_pos_get",-position)
     return status['error']
 
-def guess_obj_time():
+def guess_obj_time(*args):
     obj_pts = obj_tree["Scan/Obj./Steps"]
     galvo_pts = obj_tree["Scan/Galvo/Steps"]
     ctime = obj_tree["Scan/Count Time (ms)"] + obj_tree["Scan/Wait Time (ms)"]
