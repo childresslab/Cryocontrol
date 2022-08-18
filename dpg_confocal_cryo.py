@@ -658,7 +658,7 @@ def single_optimize_run():
         # position.
         try:
             set_galvo(optim,fpga.get_galvo()[1])
-        except ValueError:
+        except FPGAValueError:
             set_galvo(*position_register['temp_galvo_position'])
         # Plot the fit on the optimization plot
         new_axis = np.linspace(np.min(positions),np.max(positions),1000)
@@ -705,7 +705,7 @@ def single_optimize_run():
         optim = max(optim,np.min(positions))
         try:
             set_galvo(fpga.get_galvo()[0],optim)
-        except ValueError:
+        except FPGAValueError:
             set_galvo(*position_register['temp_galvo_position'])
         # Plot the fit.
         new_axis = np.linspace(np.min(positions),np.max(positions),1000)
@@ -1012,7 +1012,7 @@ def set_cav_and_count(z):
 
 def set_xy_and_count(y,x):
     try:
-        set_jpe_pos(x,y,None,write=False)
+        set_jpe_xy(x,y,write=False)
     except FPGAValueError:
         return 0
     count = get_count(pzt_tree["Scan/Count Time (ms)"])
@@ -1071,7 +1071,7 @@ def do_cav_scan_step():
 
 def set_xy_get_cav(y,x):
     try:
-        set_jpe_pos(x,y,None,write=False)
+        set_jpe_xy(x,y,write=False)
         do_cav_scan_step().join()
     except FPGAValueError:
         return np.array([-1])
@@ -1132,7 +1132,7 @@ def start_xy_scan():
 
     def finish(results,completed):
         dpg.set_value("pzt_xy_scan",False)
-        set_jpe_pos(*position_register["temp_jpe_position"])
+        set_jpe_xy(*position_register["temp_jpe_position"][:2])
         if dpg.get_value("pzt_auto_save"):
             save_xy_scan()
         for controls in [galvo_controls,optim_controls,objective_controls,piezo_controls]:
@@ -1312,7 +1312,7 @@ def start_3d_scan():
 
     def finish(results,completed):
         dpg.set_value("pzt_3d_scan",False)
-        set_jpe_pos(*position_register["temp_jpe_position"])
+        set_jpe_xy(*position_register["temp_jpe_position"][:2])
         set_cav_pos(*position_register["temp_cav_position"])
         if dpg.get_value("pzt_auto_save"):
             save_xy_scan()
@@ -1377,17 +1377,139 @@ def guess_pzt_times(*args):
 def xy_pos_callback(sender,app_data,user_data):
     try:
         write = not dpg.get_value("count")
-        set_jpe_pos(app_data[0],app_data[1],None,write=write)
+        set_jpe_xy(app_data[0],app_data[1],write=write)
     except FPGAValueError:
         pass
 
 def z_pos_callback(sender,app_data,user_data):
     try:
         write = not dpg.get_value("count")
-        set_jpe_pos(None,None,app_data,write=write)
+        set_jpe_z(app_data,write=write)
     except FPGAValueError:
         pass
 
+def tilt_z_pos_callback(sender,app_data,user_data):
+    try:
+        write = not dpg.get_value("count")
+        set_jpe_z_tilt(app_data,write=write)
+    except FPGAValueError:
+        pass
+
+def tilt_callback(sender, app_data, user_data):
+    try:
+        write = not dpg.get_value("count")
+        set_jpe_xy(None,None,write=write)
+    except FPGAValueError:
+        pass
+
+def get_tilt(x,y):
+    if pzt_tree["JPE/Tilt/Enable"]:
+        x_tilt, y_tilt = pzt_tree["JPE/Tilt/XY Slope (V\V)"][:2]
+        z_delta = x_tilt * x + y_tilt * y
+        z_abs_lim = pzt_tree["JPE/Tilt/Abs. Limit"]
+        if z_delta < -z_abs_lim:
+            z_delta = -z_abs_lim
+        if z_delta > z_abs_lim:
+            z_delta = z_abs_lim
+    else:
+        z_delta = 0
+    return z_delta
+
+def toggle_tilt(sender, app_data,user_data):
+    if app_data:
+        try:
+            set_jpe_z()
+            dpg.enable_item("pzt_tree_JPE/Tilt/Z Offset")
+            dpg.enable_item("pzt_tree_JPE/Set Z Position")
+        except FPGAValueError:
+            # Changing tilt would put us out of bounds
+            pzt_tree["JPE/Tilt/Enable"] = False
+    else:
+        try:
+            set_jpe_z()
+            dpg.disable_item("pzt_tree_JPE/Tilt/Z Offset")
+            dpg.disable_item("pzt_tree_JPE/Set Z Position")
+        except FPGAValueError:
+            # Changing tilt would put us out of bounds
+            pzt_tree["JPE/Tilt/Enable"] = True
+
+def set_jpe_xy(x=None,y=None,write=True):
+    current_pos = fpga.get_jpe_pzs()
+    if x is None:
+        x = current_pos[0]
+    if y is None:
+        y = current_pos[1]
+    z0 = pzt_tree["JPE/Z0 Position"]
+    z_delta = get_tilt(x,y)
+    
+    if pzt_tree["JPE/Tilt/Enable"]:
+        compensated_z = z0 + z_delta
+    else:
+        compensated_z = z0
+
+    volts = pz_conv.zs_from_cart([x,y,compensated_z])
+    in_bounds = pz_conv.check_bounds(x,y,compensated_z)
+    if not in_bounds:
+        pzt_tree["JPE/XY Position"] = current_pos[:2]
+        raise FPGAValueError("Out of bounds")
+
+    pzt_tree["JPE/Set Z Position"] = compensated_z
+    pzt_tree["JPE/Tilt/Z Offset"] = z_delta
+    pzt_tree["JPE/Z Volts"] = volts
+    pzt_tree["JPE/XY Position"] = [x,y]
+    fpga.set_jpe_pzs(x,y,compensated_z,write=write)
+    pzt_plot.set_cursor([x,y])
+    log.debug(f"Set JPE Position to ({x},{y},{compensated_z})")
+    draw_bounds()
+    
+def set_jpe_z(z=None,write=True):
+    current_pos = fpga.get_jpe_pzs()
+    x = current_pos[0]
+    y = current_pos[1]
+    z_delta = get_tilt(x,y)
+    if z is None:
+        z = current_pos[2] - z_delta
+    if pzt_tree["JPE/Tilt/Enable"]:
+        compensated_z = z + z_delta
+    else:
+        compensated_z = z
+    volts = pz_conv.zs_from_cart([x,y,compensated_z])
+    in_bounds = pz_conv.check_bounds(x,y,compensated_z)
+    if not in_bounds:
+        pzt_tree["JPE/Z0 Position"] = current_pos[2] - z_delta
+        raise FPGAValueError("Out of bounds")
+
+    pzt_tree["JPE/Z Volts"] = volts
+    pzt_tree["JPE/Z0 Position"] = z
+    pzt_tree["JPE/Set Z Position"] = compensated_z
+    fpga.set_jpe_pzs(None,None,compensated_z,write=write)
+    log.debug(f"Set JPE Z to {z}")
+    draw_bounds()
+
+def set_jpe_z_tilt(z=None,write=True):
+    current_pos = fpga.get_jpe_pzs()
+    x = current_pos[0]
+    y = current_pos[1]
+    if z is None:
+        z = pzt_tree["JPE/Set Z Position"]
+    z_delta = get_tilt(x,y)
+    if pzt_tree["JPE/Tilt/Enable"]:
+        z0 = z - z_delta
+    else:
+        z0 = z
+    volts = pz_conv.zs_from_cart([x,y,z])
+    in_bounds = pz_conv.check_bounds(x,y,z)
+    if not in_bounds:
+        pzt_tree["JPE/Set Z Position"] = current_pos[2]
+        raise FPGAValueError("Out of bounds")
+
+    pzt_tree["JPE/Z Volts"] = volts
+    pzt_tree["JPE/Z0 Position"] = z0
+    pzt_tree["JPE/Set Z Position"] = z
+    fpga.set_jpe_pzs(None,None,z,write=write)
+    log.debug(f"Set JPE Tilted Z to {z}")
+    draw_bounds()
+"""
 def set_jpe_pos(x=None,y=None,z=None,write=True):
     current_pos = fpga.get_jpe_pzs()
     if x is None:
@@ -1396,20 +1518,37 @@ def set_jpe_pos(x=None,y=None,z=None,write=True):
         y = current_pos[1]
     if z is None:
         z = current_pos[2]
+
+    if pzt_tree["JPE/Tilt/Enable"]:
+        dpg.enable_item("pzt_tree_JPE/Tilt/Z Offset")
+        x_tilt, y_tilt = pzt_tree["JPE/Tilt/XY Slope (V\V)"][:2]
+        z_delta = x_tilt * x + y_tilt * y
+        z_abs_lim = pzt_tree["JPE/Tilt/Abs. Limit"]
+        if z_delta < -z_abs_lim:
+            z_delta = -z_abs_lim
+        if z_delta > z_abs_lim:
+            z_delta = z_abs_lim
+    else:
+        dpg.disable_item("pzt_tree_JPE/Tilt/Z Offset")
+        z_delta = 0
+    compensated_z = z_delta + z
+
     volts = pz_conv.zs_from_cart([x,y,z])
     in_bounds = pz_conv.check_bounds(x,y,z)
     if not in_bounds:
         pzt_tree["JPE/XY Position"] = current_pos[:2]
-        pzt_tree["JPE/Z Position"] = current_pos[2]
+        pzt_tree["JPE/Z0 Position"] = current_pos[3]
         raise FPGAValueError("Out of bounds")
 
+    pzt_tree["JPE/Tilt/Z Offset"] = z_delta
     pzt_tree["JPE/Z Volts"] = volts
-    pzt_tree["JPE/Z Position"] = z
+    pzt_tree["JPE/Z0 Position"] = z
     pzt_tree["JPE/XY Position"] = [x,y]
     fpga.set_jpe_pzs(x,y,z,write=write)
     pzt_plot.set_cursor([x,y])
     log.debug(f"Set JPE Position to ({x},{y},{z})")
     draw_bounds()
+"""
 
 def set_cav_pos(z,write=False):
     fpga.set_cavity(z,write=write)
@@ -1421,7 +1560,7 @@ def man_set_cavity(sender,app_data,user_data):
     set_cav_pos(app_data,write=write)
 
 def draw_bounds():
-    zpos = pzt_tree['JPE/Z Position']
+    zpos = fpga.get_jpe_pzs()[2]
     bound_points = list(pz_conv.bounds('z',zpos))
     bound_points.append(bound_points[0])
     if dpg.does_item_exist('pzt_bounds'):
@@ -1429,13 +1568,14 @@ def draw_bounds():
     dpg.draw_polygon(bound_points,tag='pzt_bounds',parent="Piezo Scan_plot")
 
 def xy_cursor_callback(sender,position):
-    zpos = pzt_tree['JPE/Z Position']
+
     cur_xy = pzt_tree['JPE/XY Position'][:2]
-    if not pz_conv.check_bounds(position[0],position[1],zpos):
+    write = not dpg.get_value("count")
+    try:
+        set_jpe_xy(position[0],position[1],write=write)
+    except FPGAValueError:
         pzt_plot.set_cursor(cur_xy)
-    else:
-        write = not dpg.get_value("count")
-        set_jpe_pos(position[0],position[1],zpos,write=write)
+
 pzt_plot.cursor_callback=xy_cursor_callback
 
 def save_xy_scan(*args):
@@ -1691,7 +1831,9 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                               "obj_tree_Objective/Set Position (um)",
                               "obj_tree_Objective/Limits (um)",
                               "obj_tree_Objective/Max Move (um)",
-                              "obj_scan"]
+                              "obj_scan",
+                              "obj_up",
+                              "obj_dn"]
         objective_params = ["obj_tree_Scan/Count Time (ms)",
                             "obj_tree_Scan/Wait Time (ms)",
                             "obj_tree_Scan/Obj./Center (um)",
@@ -1737,8 +1879,8 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                 with dpg.child_window(width=0,height=0,autosize_y=True):
                     with dpg.group(horizontal=True):
                         with dpg.child_window(width=100):
-                            dpg.add_button(width=0,indent=25,arrow=True,direction=dpg.mvDir_Up,callback=obj_step_up)
-                            dpg.add_button(width=0,indent=25,arrow=True,direction=dpg.mvDir_Down,callback=obj_step_down)
+                            dpg.add_button(width=0,indent=25,arrow=True,direction=dpg.mvDir_Up,callback=obj_step_up,tag='obj_up')
+                            dpg.add_button(width=0,indent=25,arrow=True,direction=dpg.mvDir_Down,callback=obj_step_down,tag='obj_dn')
                             dpg.add_text('Obj. Pos.')
                             dpg.bind_item_font(dpg.last_item(),"small_font")
                             with dpg.group(horizontal=True):
@@ -1783,7 +1925,8 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
         #############
         # Piezo Tab #
         #############
-        piezo_controls = ["pzt_tree_JPE/Z Position",
+        piezo_controls = ["pzt_tree_JPE/Z0 Position",
+                          "pzt_tree_JPE/Set Z Position",
                           "pzt_tree_JPE/XY Position",
                           "pzt_tree_Cavity/Position",
                           "pzt_xy_scan",
@@ -1796,7 +1939,10 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                         "pzt_tree_Scan/Cavity/Steps",
                         "pzt_tree_Scan/JPE/Center",
                         "pzt_tree_Scan/JPE/Span",
-                        "pzt_tree_Scan/JPE/Steps"]
+                        "pzt_tree_Scan/JPE/Steps",
+                        "pzt_tree_JPE/Tilt/Enable",
+                        "pzt_tree_JPE/Tilt/XY Slope (V\V)",
+                        "pzt_tree_JPE/Tilt/Abs. Limit",]
 
         with dpg.tab(label="Piezo Control"):
             with dpg.group(horizontal=True):
@@ -1816,16 +1962,25 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
             with dpg.group(horizontal=True,width=0):
                 with dpg.child_window(width=400,autosize_x=False,autosize_y=True,tag="pzt_tree"):
                     pzt_tree = rdpg.TreeDict('pzt_tree','cryo_gui_settings/pzt_tree_save.csv')
-                    pzt_tree.add("JPE/Z Position",0.0,
+                    pzt_tree.add("JPE/Z0 Position",0.0,
                                  item_kwargs={'min_value':-6.5,'max_value':0,
                                               'min_clamped':True,'max_clamped':True,
                                               'on_enter':True,'step':0.05},
-                                              callback=z_pos_callback,save=False)
+                                               callback=z_pos_callback,save=False)
+                    pzt_tree.add("JPE/Set Z Position",0.0,
+                                 item_kwargs={'min_value':-6.5,'max_value':0,
+                                 'min_clamped':True,'max_clamped':True,
+                                 'on_enter':True,'step':0.05},
+                                 callback=tilt_z_pos_callback,save=False)
                     pzt_tree.add("JPE/XY Position",[0.0,0.0],
                                  item_kwargs={'on_enter':True},
                                  callback=xy_pos_callback,save=False)
                     pzt_tree.add("JPE/Z Volts", [0.0,0.0,0.0], save=False,
                                  item_kwargs={"readonly" : True})
+                    pzt_tree.add("JPE/Tilt/Enable", False, callback=toggle_tilt)
+                    pzt_tree.add("JPE/Tilt/XY Slope (V\V)", [0.0,0.0],callback=tilt_callback,item_kwargs={'on_enter':True})
+                    pzt_tree.add("JPE/Tilt/Abs. Limit", 1.0, callback=tilt_callback,item_kwargs={"min_value":0,"min_clamped":True})
+                    pzt_tree.add("JPE/Tilt/Z Offset",0.0,save=False, item_kwargs={'readonly':True,'step':0})
 
                     pzt_tree.add("Cavity/Position",0.0,
                                  item_kwargs={'min_value':-8,'max_value':8,
@@ -1896,11 +2051,14 @@ jpe_position = fpga.get_jpe_pzs()
 galvo_tree["Galvo/Position"] = galvo_position
 galvo_plot.set_cursor(galvo_position)
 pzt_tree["Cavity/Position"] = cavity_position[0]
-pzt_tree["JPE/Z Position"] = jpe_position[2]
+# Enabling tilt will ensure that no sudden z0 position change occurs
+# In doing so, since we recall the tilt after the z position
+# It will properly set 
+pzt_tree["JPE/Z0 Position"] = jpe_position[2]
 pzt_tree["JPE/XY Position"] = jpe_position[:2]
 pzt_tree["JPE/Z Volts"] = pz_conv.zs_from_cart(jpe_position)
 toggle_AI(None,count_tree["Counts/Show AI1"], None)
-
+toggle_tilt(None,pzt_tree["JPE/Tilt/Enable"], None)
 
 guess_pzt_times()
 guess_galvo_time()
@@ -1908,5 +2066,4 @@ guess_obj_time()
 draw_bounds()
 pzt_plot.set_cursor(jpe_position[:2])
 dpg.set_primary_window('main_window',True)
-dpg.show_item_registry()
 rdpg.start_dpg()
