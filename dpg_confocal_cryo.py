@@ -1053,12 +1053,16 @@ def do_cav_scan_step():
         check = pzt_tree["Plot/Update Every Point"] or i + 1 >= imax
         if check:
             dpg.set_value("cav_counts",[cav_data['pos'],cav_data['counts']])
+            if pzt_tree['Plot/Autoscale']:
+                dpg.set_axis_limits_auto("cav_count_y")
+                dpg.fit_axis_data("cav_count_y")
         if count_tree["Counts/Plot Scan Counts"]:
             plot_counts()
 
     def finish(results,completed):
         if pzt_tree['Plot/Autoscale']:
-            dpg.set_axis_limits("cav_count_y",0,np.max(results))
+            dpg.set_axis_limits_auto("cav_count_y")
+            dpg.fit_axis_data("cav_count_y")
         else:
             dpg.set_axis_limits_auto("cav_count_y")
         set_cav_pos(*position_register["temp_cav_position"])
@@ -1204,13 +1208,17 @@ def start_cav_scan():
         cav_data['counts'].append(res)
         cav_data['pos'].append(pos[0])
         dpg.set_value("cav_counts",[cav_data['pos'],cav_data['counts']])
+        if pzt_tree['Plot/Autoscale']:
+            dpg.set_axis_limits_auto("cav_count_y")
+            dpg.fit_axis_data("cav_count_y")
         if count_tree["Counts/Plot Scan Counts"]:
             plot_counts()
 
     def finish(results,completed):
         dpg.set_value("pzt_cav_scan",False)
         if pzt_tree['Plot/Autoscale']:
-            dpg.set_axis_limits("cav_count_y",0,np.max(results))
+            dpg.set_axis_limits_auto("cav_count_y")
+            dpg.fit_axis_data("cav_count_y")
         else:
             dpg.set_axis_limits_auto("cav_count_y")
         set_cav_pos(*position_register["temp_cav_position"],write=True)
