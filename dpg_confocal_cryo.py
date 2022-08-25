@@ -998,6 +998,21 @@ def get_obj_range():
         obj_tree["Scan/Obj./Center (um)"] = new_centers[1]
         obj_tree["Scan/Obj./Span (um)"] = new_spans[1]
 
+def get_obj_errors():
+    errors = obj.errors
+    if errors == []:
+        return
+    with dpg.window(label="Objective Errors", modal=True, show=True, tag="obj_errors", 
+                    pos=[int((dpg.get_viewport_width() // 2 - 500 // 2)),
+                         int((dpg.get_viewport_height() // 2 - 500 // 2))],
+                    width=500,
+                    height=500):
+        dpg.add_text('\n'.join(errors))
+        dpg.add_separator()
+        with dpg.group(horizontal=True):
+            dpg.add_button(label="OK", width=75, callback=lambda: dpg.delete_item("obj_errors"))
+
+
 ###################
 # Cavity Scanning #
 ###################
@@ -1841,7 +1856,8 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                               "obj_tree_Objective/Max Move (um)",
                               "obj_scan",
                               "obj_up",
-                              "obj_dn"]
+                              "obj_dn",
+                              "obj_get_errors"]
         objective_params = ["obj_tree_Scan/Count Time (ms)",
                             "obj_tree_Scan/Wait Time (ms)",
                             "obj_tree_Scan/Obj./Center (um)",
@@ -1859,6 +1875,7 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                 dpg.add_input_text(tag="save_obj_file", default_value="scan.npz", width=200)
                 dpg.add_button(tag="save_obj_button", label="Save Scan",callback=save_obj_scan)
                 dpg.add_checkbox(tag="auto_save_obj", label="Auto")
+                dpg.add_button(tag="obj_get_errors",label="Get Obj. Errors",callback=get_obj_errors)
             with dpg.group(horizontal=True,width=0):
                 with dpg.child_window(width=400,autosize_x=False,autosize_y=True,tag="obj_tree"):
                     obj_tree = rdpg.TreeDict('obj_tree','cryo_gui_settings/obj_tree_save.csv')

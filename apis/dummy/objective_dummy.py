@@ -240,7 +240,7 @@ class DummyObjective():
 
     @property
     def errors(self) -> list[str]:
-        return ""
+        return ["This is Error One", "This is Error Two"]
 
     def stop(self):
         pass
