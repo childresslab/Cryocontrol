@@ -1203,7 +1203,7 @@ def start_cav_scan():
     def prog(i,imax,idx,pos,res):
         log.debug("Setting Progress Bar")
         dpg.set_value("pb",(i+1)/imax)
-        dpg.configure_item("pb",overlay=f"JPE XY Scan {i+1}/{imax}")
+        dpg.configure_item("pb",overlay=f"Cavity Scan {i+1}/{imax}")
         log.debug("Updating XY Scan Plot")
         cav_data['counts'].append(res)
         cav_data['pos'].append(pos[0])
