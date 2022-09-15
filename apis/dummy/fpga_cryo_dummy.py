@@ -21,8 +21,7 @@ pz_config = {"vmax" : 0,
 pz_conv = JPECoord(pz_config['R'], pz_config['h'],
                    pz_config['vmin'], pz_config['vmax'])
 
-class FPGAValueError(Exception):
-    pass
+FPGAValueError = fb.FPGAValueError
 
 class DummyCryoFPGA(fb.DummyNiFPGA):
     _pulse_pattern_fifo = 'Host to Target DMA'
