@@ -647,7 +647,7 @@ def single_optimize_run():
         to the optimal position, then we trigger the y-scan to be run.
         """
         positions = galvo_scanner_x.positions[0]
-        fit_x = fit_galvo_optim(positions,results)
+        fit_x = fit_jpe_optim(positions,results)
         vals = fit_x.best_values
         # Get the peak x based on the quadratic fit results.
         optim = -vals['b']/(2*vals['a'])
@@ -698,7 +698,7 @@ def single_optimize_run():
         and galvo ranges.
         """
         positions = galvo_scanner_y.positions[0]
-        fit_y = fit_galvo_optim(positions,results)
+        fit_y = fit_jpe_optim(positions,results)
         vals = fit_y.best_values
         optim = -vals['b']/(2*vals['a'])
         optim = min(optim,np.max(positions))
@@ -1532,46 +1532,6 @@ def set_jpe_z_tilt(z=None,write=True):
     fpga.set_jpe_pzs(None,None,z,write=write)
     log.debug(f"Set JPE Tilted Z to {z}")
     draw_bounds()
-"""
-def set_jpe_pos(x=None,y=None,z=None,write=True):
-    current_pos = fpga.get_jpe_pzs()
-    if x is None:
-        x = current_pos[0]
-    if y is None:
-        y = current_pos[1]
-    if z is None:
-        z = current_pos[2]
-
-    if pzt_tree["JPE/Tilt/Enable"]:
-        dpg.enable_item("pzt_tree_JPE/Tilt/Z Offset")
-        x_tilt, y_tilt = pzt_tree["JPE/Tilt/XY Slope (V\V)"][:2]
-        z_delta = x_tilt * x + y_tilt * y
-        z_abs_lim = pzt_tree["JPE/Tilt/Abs. Limit"]
-        if z_delta < -z_abs_lim:
-            z_delta = -z_abs_lim
-        if z_delta > z_abs_lim:
-            z_delta = z_abs_lim
-    else:
-        dpg.disable_item("pzt_tree_JPE/Tilt/Z Offset")
-        z_delta = 0
-    compensated_z = z_delta + z
-
-    volts = pz_conv.zs_from_cart([x,y,z])
-    in_bounds = pz_conv.check_bounds(x,y,z)
-    if not in_bounds:
-        pzt_tree["JPE/XY Position"] = current_pos[:2]
-        pzt_tree["JPE/Z0 Position"] = current_pos[3]
-        raise FPGAValueError("Out of bounds")
-
-    pzt_tree["JPE/Tilt/Z Offset"] = z_delta
-    pzt_tree["JPE/Z Volts"] = volts
-    pzt_tree["JPE/Z0 Position"] = z
-    pzt_tree["JPE/XY Position"] = [x,y]
-    fpga.set_jpe_pzs(x,y,z,write=write)
-    pzt_plot.set_cursor([x,y])
-    log.debug(f"Set JPE Position to ({x},{y},{z})")
-    draw_bounds()
-"""
 
 def set_cav_pos(z,write=False):
     fpga.set_cavity(z,write=write)
@@ -1608,6 +1568,7 @@ def save_xy_scan(*args):
     as_npz = not (".csv" in filename)
     header = jpe_xy_scan.gen_header("XY Piezo Scan")
     jpe_xy_scan.save_results(str(path),as_npz=as_npz,header=header)
+
 def save_3d_scan(*args):
     path = Path(dpg.get_value("save_dir"))
     filename = dpg.get_value("save_pzt_file")
@@ -1619,6 +1580,7 @@ def save_3d_scan(*args):
     header += f"cavity steps, {repr(jpe_cav_scan.steps)}\n"
 
     jpe_3D_scan.save_results(str(path),as_npz=as_npz,header=header)
+
 def save_cav_scan(*args):
     path = Path(dpg.get_value("save_dir"))
     filename = dpg.get_value("save_pzt_file")
@@ -1626,6 +1588,378 @@ def save_cav_scan(*args):
     as_npz = not (".csv" in filename)
     header = jpe_cav_scan.gen_header("Cavity Piezo Scan")
     jpe_cav_scan.save_results(str(path),as_npz=as_npz,header=header)
+
+#######################
+# Cavity Optimization #
+#######################
+def jpe_optim_scanner_func(axis='x'):
+    """This function generates the function be called by the optimization scanner
+    Basically just makes a function that scans over a single axis, getting the counts.
+
+    Parameters
+    ----------
+    axis : str, optional
+        which function to be scanned over, by default 'x'
+
+    Returns
+    -------
+    Callable
+        The function that sets the single axis scan position.
+
+    Raises
+    ------
+    ValueError
+        If an incorrect axis is called for, this should never happen.
+    """
+    if axis == 'x':
+        def optim_func(x):
+            y = position_register['temp_jpe_position'][1]
+            set_jpe_xy(x,y)
+            count = get_count(pzt_optim_tree["XY/Count Time (ms)"])
+            return count
+    elif axis == 'y':
+        def optim_func(y):
+            x = position_register['temp_jpe_position'][0]
+            set_jpe_xy(x,y)
+            count = get_count(pzt_optim_tree["XY/Count Time (ms)"])
+            return count
+    else:
+        raise ValueError(f"Invalid Axis {axis}, must be either 'x' or 'y'.")
+    return optim_func
+
+def fit_jpe_optim(position:NDArray[np.float64],counts:NDArray[np.float64]) -> lm.model.ModelResult:
+    """
+    Fit a quadratic to the given data, for optimizing the galvo position.
+
+    Parameters
+    ----------
+    position : NDArray[np.float64]
+        The array containing the position data
+    counts : NDArray[np.float64]
+        The array containing the counts data
+
+    Returns
+    -------
+    lm.model.ModelResult
+        The fit result object from lmfit.
+    """
+    model = lm.models.QuadraticModel()
+    params = model.guess(counts,x=position)
+    params['a'].set(max=0)
+    # Probably more annoying to do it right.
+    weights = 1/np.sqrt(np.array([count if count > 0 else 1 for count in counts]))
+    return model.fit(counts,params,x=position,weights=weights)
+
+def optimize_jpe(*args):
+    """
+    Run multiple iterations of the optimization routine. To narrow in on the
+    optimal position. Number of iterations set from GUI
+    """
+    def loop_optim():
+        # Do the loop the desired number of times.
+        for i in range(pzt_optim_tree["XY/Iterations"]):
+            single_optimize_run().join()
+    # Run this all in an additional thread to avoid freezing the UI
+    optim_thread = Thread(target=loop_optim)
+    optim_thread.start()
+
+def single_optimize_run():
+    """
+    Function for running the optimization scan.
+
+    Returns
+    -------
+    Thread
+        The thread on which the scan is being run.
+    """
+    # Save the initial galvo position, in case of aborted scan.
+    position_register["temp_jpe_position"] = fpga.get_jpe_pzs()
+    init_jpe_pos = position_register["temp_jpe_position"]
+    # The scanner which will do the x scan
+    jpe_scanner_x = Scanner(jpe_optim_scanner_func('x'),
+                            [init_jpe_pos[0]],
+                            [pzt_optim_tree["XY/Scan Range (XY)"]],
+                            [pzt_optim_tree["XY/Scan Points"]],
+                            output_dtype=float,
+                            labels=["JPE X"])
+    # The scanner which will do the y scan
+    jpe_scanner_y = Scanner(jpe_optim_scanner_func('y'),
+                            [init_jpe_pos[1]],
+                            [pzt_optim_tree["XY/Scan Range (XY)"]],
+                            [pzt_optim_tree["XY/Scan Points"]],
+                            output_dtype=float,
+                            labels=["JPE Y"])
+    # The data for the optimizer to consider.
+    optim_data = {}
+    # Stop counting if that's currently happening.
+    abort_counts()
+    # Setup the functions for the scanners.
+    def init_x():
+        """
+        Prepares the fpga and plot for the scan.
+        """
+        fpga.set_ao_wait(pzt_optim_tree["XY/Wait Time (ms)"],write=False)
+        position_register["temp_jpe_position"] = fpga.get_jpe_pzs()
+        optim_data['counts'] = []
+        optim_data['pos'] = []
+        dpg.set_value('pzt_optim_x_counts',[[],[]])
+        dpg.set_value('pzt_optim_y_counts',[[],[]])
+        dpg.set_value('pzt_optim_x_fit',[[],[]])
+        dpg.set_value('pzt_optim_y_fit',[[],[]])
+        for controls in [galvo_controls,optim_controls,objective_controls,piezo_controls]:
+            for control in controls:
+                dpg.disable_item(control)
+        for param in pzt_optim_params:
+            dpg.disable_item(param)
+        for plot in [galvo_plot,pzt_plot,obj_plot]:
+            plot.disable_cursor()
+
+    def prog_x(i,imax,idx,pos,res):
+        """
+        Update the x plot of the scan. Since we're doing few points, we can
+        afford to plot them all as they come in.
+        """
+        # Set Progress Bar
+        dpg.set_value("pb",(i+1)/(2*imax))
+        dpg.configure_item("pb",overlay=f"Opt. JPE (X) {i+1}/{2*imax}")
+        # Update the optimization data
+        optim_data['counts'].append(res)
+        optim_data['pos'].append(pos[0])
+        # Update the plots
+        dpg.set_value('pzt_optim_x_counts',[optim_data['pos'],optim_data['counts']])
+        if count_tree["Counts/Plot Scan Counts"]:
+                    plot_counts()
+
+    def finish_x(results,completed):
+        """
+        Once the scan is completed, we fit the data, and move the x position
+        to the optimal position, then we trigger the y-scan to be run.
+        """
+        positions = jpe_scanner_x.positions[0]
+        fit_x = fit_jpe_optim(positions,results)
+        vals = fit_x.best_values
+        # Get the peak x based on the quadratic fit results.
+        optim = -vals['b']/(2*vals['a'])
+        # Fix the ideal position to be within the bounds of the scan.
+        optim = min(optim,np.max(positions))
+        optim = max(optim,np.min(positions))
+        # If the desired position is outside range, we just use the starting
+        # position.
+        try:
+            set_jpe_xy(optim,fpga.get_jpe_pzs()[1])
+        except FPGAValueError:
+            set_jpe_xy(*position_register['temp_jpe_position'][:2])
+        # Plot the fit on the optimization plot
+        new_axis = np.linspace(np.min(positions),np.max(positions),1000)
+        fit_data = fit_x.eval(fit_x.params,x=new_axis)
+        dpg.set_value('pzt_optim_x_fit',[new_axis,fit_data])
+        # Start the y-scan.
+        jpe_scanner_y.run_async().join()
+
+    # Setup the scanner object.
+    jpe_scanner_x._init_func = init_x
+    jpe_scanner_x._prog_func = prog_x
+    jpe_scanner_x._finish_func = finish_x
+
+    def init_y():
+        """
+        Prepares for the second scan be clearing the data and updating
+        the starting position.
+        """
+        optim_data['counts'] = []
+        optim_data['pos'] = []
+        position_register["temp_jpe_position"] = fpga.get_jpe_pzs()
+
+    def prog_y(i,imax,idx,pos,res):
+        """
+        Update the plot while we take the scan.
+        """
+        dpg.set_value("pb",(i+1+imax)/(2*imax))
+        dpg.configure_item("pb",overlay=f"Opt. JPE (Y) {i+1+imax}/{2*imax}")
+        optim_data['counts'].append(res)
+        optim_data['pos'].append(pos[0])
+        dpg.set_value('pzt_optim_y_counts',[optim_data['pos'],optim_data['counts']])
+        if count_tree["Counts/Plot Scan Counts"]:
+            plot_counts()
+
+    def finish_y(results,completed):
+        """
+        Do the fit of the data and set the new position. Limiting to scan
+        and galvo ranges.
+        """
+        positions = jpe_scanner_y.positions[0]
+        fit_y = fit_galvo_optim(positions,results)
+        vals = fit_y.best_values
+        optim = -vals['b']/(2*vals['a'])
+        optim = min(optim,np.max(positions))
+        optim = max(optim,np.min(positions))
+        try:
+            set_jpe_xy(fpga.get_jpe_pzs()[0],optim)
+        except FPGAValueError:
+            set_jpe_xy(*position_register['temp_jpe_position'][:2])
+        # Plot the fit.
+        new_axis = np.linspace(np.min(positions),np.max(positions),1000)
+        fit_data = fit_y.eval(fit_y.params,x=new_axis)
+        dpg.set_value('pzt_optim_y_fit',[new_axis,fit_data])
+        for controls in [galvo_controls,optim_controls,objective_controls,piezo_controls]:
+            for control in controls:
+                dpg.enable_item(control)
+        for param in pzt_optim_params:
+            dpg.enable_item(param)
+        for plot in [galvo_plot,pzt_plot,obj_plot]:
+            plot.enable_cursor()
+
+    # Setup the y-scanner object.
+    jpe_scanner_y._init_func = init_y
+    jpe_scanner_y._prog_func = prog_y
+    jpe_scanner_y._finish_func = finish_y
+
+    # Run the x-scan asynchronously, which will then trigger the y-scan.
+    return jpe_scanner_x.run_async()
+
+def cav_optim_func(z):
+    try:
+        set_cav_pos(z,write=False)
+    except FPGAValueError:
+        return 0
+    count = get_count(pzt_optim_tree["Cav/Count Time (ms)"])
+    return count
+
+def optimize_cav():
+    cav_scanner = Scanner(cav_optim_func,
+                          [0],
+                          [16],
+                          [pzt_optim_tree["Cav/Scan Points"]],
+                          output_dtype=float,
+                          labels=["Cav"])
+    cav_scanner_fine = Scanner(cav_optim_func,
+                               [0],
+                               [pzt_optim_tree["Cav/Narrow Scan Range"]],
+                               [pzt_optim_tree["Cav/Scan Points"]],
+                               output_dtype=float,
+                               labels=["Cav"])
+
+    optim_data = {}
+    # Setup the functions for the scanners.
+    def init_cav():
+        """
+        Prepares the fpga and plot for the scan.
+        """
+        fpga.set_ao_wait(pzt_optim_tree["Cav/Wait Time (ms)"],write=False)
+        position_register["temp_cav_position"] = fpga.get_cavity()
+        optim_data['counts'] = []
+        optim_data['pos'] = []
+        dpg.set_value('pzt_optim_cav_counts',[[],[]])
+        dpg.set_value('pzt_optim_cav_fit',[[],[]])
+        for controls in [galvo_controls,optim_controls,objective_controls,piezo_controls]:
+            for control in controls:
+                dpg.disable_item(control)
+        for param in pzt_optim_params:
+            dpg.disable_item(param)
+        for plot in [galvo_plot,pzt_plot,obj_plot]:
+            plot.disable_cursor()
+
+    def init_cav_fine():
+        """
+        Prepares the fpga and plot for the scan.
+        """
+        position_register["temp_cav_position"] = fpga.get_cavity()
+        optim_data['counts'] = []
+        optim_data['pos'] = []
+        dpg.set_value('pzt_optim_cav_counts',[[],[]])
+        dpg.set_value('pzt_optim_cav_fit',[[],[]])
+
+    def prog_cav(i,imax,idx,pos,res):
+        """
+        Update the cav plot of the scan. Since we're doing few points, we can
+        afford to plot them all as they come in.
+        """
+        # Set Progress Bar
+        dpg.set_value("pb",(i+1)/(2*imax))
+        dpg.configure_item("pb",overlay=f"Opt. Cav Wide {i+1}/{2*imax}")
+        # Update the optimization data
+        optim_data['counts'].append(res)
+        optim_data['pos'].append(pos[0])
+        # Update the plots
+        dpg.set_value('pzt_optim_cav_counts',[optim_data['pos'],optim_data['counts']])
+        if count_tree["Counts/Plot Scan Counts"]:
+                    plot_counts()
+    def prog_cav_fine(i,imax,idx,pos,res):
+        """
+        Update the cav plot of the scan. Since we're doing few points, we can
+        afford to plot them all as they come in.
+        """
+        # Set Progress Bar
+        dpg.set_value("pb",(i+1 + imax)/(2*imax))
+        dpg.configure_item("pb",overlay=f"Opt. Cav Fine {i+1 + imax}/{2*imax}")
+        # Update the optimization data
+        optim_data['counts'].append(res)
+        optim_data['pos'].append(pos[0])
+        # Update the plots
+        dpg.set_value('pzt_optim_cav_counts',[optim_data['pos'],optim_data['counts']])
+        if count_tree["Counts/Plot Scan Counts"]:
+                    plot_counts()
+
+    def finish_cav(results,completed):
+        """
+        Once the scan is completed, we fit the data, and move the cav position
+        to the optimal position. Then we start a fine scan.
+        """
+        positions = cav_scanner.positions[0]
+        max_idx = np.argmax(results)
+        optim = positions[max_idx]
+        # Fix the ideal position to be within the bounds of the scan.
+        optim = min(optim,np.max(positions))
+        optim = max(optim,np.min(positions))
+        # If the desired position is outside range, we just use the starting
+        # position.
+        try:
+            set_cav_pos(optim)
+        except FPGAValueError:
+            set_cav_pos(position_register['temp_cav_position'])
+        cav_scanner_fine.centers = [fpga.get_cavity()[0]]
+        cav_scanner_fine.run_async()
+
+    def finish_cav_fine(results,completed):
+        """
+        Once the scan is completed, we fit the data, and move the cav position
+        to the optimal position. Then we start a fine scan.
+        """
+        positions = cav_scanner_fine.positions[0]
+        fit_results = fit_jpe_optim(positions,results)
+        vals = fit_results.best_values
+        optim = -vals['b']/(2*vals['a'])
+        # Fix the ideal position to be within the bounds of the scan.
+        optim = min(optim,np.max(positions))
+        optim = max(optim,np.min(positions))
+        # If the desired position is outside range, we just use the starting
+        # position.
+        try:
+            set_cav_pos(optim)
+        except FPGAValueError:
+            set_cav_pos(position_register['temp_cav_position'])
+        # Plot the fit.
+        new_axis = np.linspace(np.min(positions),np.max(positions),1000)
+        fit_data = fit_results.eval(fit_results.params,x=new_axis)
+        dpg.set_value('pzt_optim_cav_fit',[new_axis,fit_data])
+        for controls in [galvo_controls,optim_controls,objective_controls,piezo_controls]:
+            for control in controls:
+                dpg.enable_item(control)
+        for param in pzt_optim_params:
+            dpg.enable_item(param)
+        for plot in [galvo_plot,pzt_plot,obj_plot]:
+            plot.enable_cursor()
+            
+    # Setup the scanner object.
+    cav_scanner._init_func = init_cav
+    cav_scanner._prog_func = prog_cav
+    cav_scanner._finish_func = finish_cav
+
+    cav_scanner_fine._init_func = init_cav_fine
+    cav_scanner_fine._prog_func = prog_cav_fine
+    cav_scanner_fine._finish_func = finish_cav_fine
+
+    cav_scanner.run_async()
 
 ################################################################################
 ############################### UI Building ####################################
@@ -2058,17 +2392,93 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                                     dpg.add_drag_line(tag="cav_count_cut",parent='cav_plot',default_value=0,
                                                       callback=update_pzt_plot)
                                     dpg.add_plot_legend()
+        #################
+        # Optimizer Tab #
+        #################
+        pzt_optim_controls = ["pzt_optimize"]
+        pzt_optim_params = ["pzt_optim_tree_XY/Count Time (ms)",
+                            "pzt_optim_tree_XY/Wait Time (ms)",
+                            "pzt_optim_tree_XY/Scan Points",
+                            "pzt_optim_tree_XY/Scan Range (XY)",
+                            "pzt_optim_tree_XY/Iterations",
+                            "pzt_optim_tree_Cav/Count Time (ms)",
+                            "pzt_optim_tree_Cav/Wait Time (ms)",
+                            "pzt_optim_tree_Cav/Scan Points",
+                            "pzt_optim_tree_Cav/Narrow Scan Range"]
+        with dpg.tab(label="Piezo Optimizer"):
+            with dpg.group(horizontal=True):
+                dpg.add_button(tag="optim_pzt_xy",label="Optimize JPE XY",callback=optimize_jpe)
+                dpg.add_button(tag="optim_pzt_cav",label="Optimize Fiber",callback=optimize_cav)
+            with dpg.group(horizontal=True,width=0):
+                with dpg.child_window(width=400,autosize_x=False,autosize_y=True,tag="pzt_optim_tree"):
+                    pzt_optim_tree = rdpg.TreeDict('pzt_optim_tree','cryo_gui_settings/pzt_optim_tree_save.csv')
+                    pzt_optim_tree.add("XY/Count Time (ms)", 50.0,item_kwargs={'min_value':1.0,'min_clamped':True,'step':1},
+                                   tooltip="How long the fpga counts at each position.")
+                    pzt_optim_tree.add("XY/Wait Time (ms)", 20.0,item_kwargs={'min_value':1.0,'min_clamped':True,'step':1},
+                                   tooltip="How long the fpga waits before counting after moving.")
+                    pzt_optim_tree.add("XY/Scan Points", 50,item_kwargs={'min_value':2,'min_clamped':True},
+                                   tooltip="Number of points to scan along each axis.")
+                    pzt_optim_tree.add("XY/Scan Range (XY)", 2,item_kwargs={'min_value':0.0,'min_clamped':True,'step':0},
+                                   tooltip="Size of scan along each axis in volts.")
+                    pzt_optim_tree.add("XY/Iterations", 2,item_kwargs={'min_value':1,'min_clamped':True},
+                                   tooltip="How many times to rerun the optimization around each new point.")
+
+                    pzt_optim_tree.add("Cav/Count Time (ms)", 50.0,item_kwargs={'min_value':1.0,'min_clamped':True,'step':1},
+                                   tooltip="How long the fpga counts at each position.")
+                    pzt_optim_tree.add("Cav/Wait Time (ms)", 5.0,item_kwargs={'min_value':1.0,'min_clamped':True,'step':1},
+                                   tooltip="How long the fpga waits before counting after moving.")
+                    pzt_optim_tree.add("Cav/Scan Points", 300,item_kwargs={'min_value':2,'min_clamped':True},
+                                   tooltip="Number of points to scan along each axis.")
+                    pzt_optim_tree.add("Cav/Narrow Scan Range", 0.1,item_kwargs={'min_value':0.0,'min_clamped':True,'step':0},
+                                   tooltip="Size of scan along each axis in volts.")
+
+                with dpg.child_window(width=-1,autosize_y=True): 
+                    with dpg.group(width=-1):
+                        with dpg.child_window(width=0,height=333):
+                            with dpg.subplots(1,2,label="Optimizer",width=-1,height=-1,tag="pzt_optim_plot"):
+                                with dpg.plot(label="X Scan", tag="pzt_optim_x"):
+                                    dpg.bind_font("plot_font") 
+                                    # REQUIRED: create x and y axes
+                                    dpg.add_plot_axis(dpg.mvXAxis, label="x", tag="pzt_optim_x_x")
+                                    dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="pzt_optim_x_y")
+                                    dpg.add_line_series([0],[0],
+                                                        parent='pzt_optim_x_y',label='counts', tag='pzt_optim_x_counts')
+                                    dpg.add_line_series([0],[0],
+                                                        parent='pzt_optim_x_y',label='fit', tag='pzt_optim_x_fit')
+                                    dpg.add_plot_legend()
+                                with dpg.plot(label="Y Scan", tag="pzt_optim_y"):
+                                    dpg.bind_font("plot_font") 
+                                    # REQUIRED: create x and y axes
+                                    dpg.add_plot_axis(dpg.mvXAxis, label="x", tag="pzt_optim_y_x")
+                                    dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="pzt_optim_y_y")
+                                    dpg.add_line_series([0],[0],
+                                                        parent='pzt_optim_y_y',label='counts', tag='pzt_optim_y_counts')
+                                    dpg.add_line_series([0],[0],
+                                                        parent='pzt_optim_y_y',label='fit', tag='pzt_optim_y_fit')
+                                    dpg.add_plot_legend()
+
+                        with dpg.child_window(width=0,height=333):
+                            with dpg.plot(label="Cav Scan", tag="pzt_optim_cav", width=-1,height=-1):
+                                dpg.bind_font("plot_font") 
+                                # REQUIRED: create x and y axes
+                                dpg.add_plot_axis(dpg.mvXAxis, label="x", tag="pzt_optim_cav_x")
+                                dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="pzt_optim_cav_y")
+                                dpg.add_line_series([0],[0],
+                                                    parent='pzt_optim_cav_x',label='counts', tag='pzt_optim_cav_counts')
+                                dpg.add_line_series([0],[0],
+                                                    parent='pzt_optim_cav_x',label='fit', tag='pzt_optim_cav_fit')
+                                dpg.add_plot_legend()
 
 ##################
 # Initialization #
 ##################
-
 # Load in tree values
 count_tree.load()
 galvo_tree.load()
 optim_tree.load()
 obj_tree.load()
 pzt_tree.load()
+pzt_optim_tree.load()
 # Initialize Values
 galvo_position = fpga.get_galvo()
 cavity_position = fpga.get_cavity()
@@ -2082,7 +2492,7 @@ pzt_tree["Cavity/Position"] = cavity_position[0]
 pzt_tree["JPE/Z0 Position"] = jpe_position[2]
 pzt_tree["JPE/XY Position"] = jpe_position[:2]
 pzt_tree["JPE/Z Volts"] = pz_conv.zs_from_cart(jpe_position)
-toggle_AI(None,count_tree["Counts/Show AI1"], None)
+toggle_AI(None, count_tree["Counts/Show AI1"], None)
 toggle_tilt(None,pzt_tree["JPE/Tilt/Enable"], None)
 
 guess_pzt_times()

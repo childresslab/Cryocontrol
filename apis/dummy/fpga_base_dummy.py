@@ -55,16 +55,19 @@ class DummyFIFO():
     def __init__(self,fpga):
         self.fpga = fpga
         self._num_points = 500
-        self._position_range = [[-10,10], [-10,10], [-2,0]]
+        self._position_range = [[-10,10], [-10,10], [-2,0],[-0.0005,0.0005]]
         # Taken from qudi
         # put randomly distributed NVs in the scanner, first the x,y scan
         self._x_positions = np.random.uniform(self._position_range[0][0],self._position_range[0][1],self._num_points)
         self._y_positions = np.random.uniform(self._position_range[1][0],self._position_range[1][1],self._num_points)
         self._z_positions = np.random.uniform(self._position_range[2][0],self._position_range[2][1],self._num_points)
+        self._cav_positions = np.random.uniform(self._position_range[3][0],self._position_range[3][1],self._num_points)
         self._amplitudes = np.random.uniform(1E3,5E3,self._num_points)
         self._x_sigmas = np.random.uniform(0.2,0.4,self._num_points)
         self._y_sigmas = np.random.uniform(0.2,0.4,self._num_points)
         self._z_sigmas = np.random.uniform(0.05,0.1,self._num_points)
+        self._cav_sigmas = np.random.uniform(0.00001,0.00004,self._num_points)
+
     def stop(self):
         pass
 
@@ -83,8 +86,13 @@ class DummyFIFO():
         xpos = galvo_pos[0]*117 - jpe_pos[1]*20*14/1000
         ypos = galvo_pos[1]*117 - jpe_pos[0]*20*14/1000
         zpos = jpe_pos[2]*20*14/1000
+        cav_pos = self.fpga.get_cavity()[0]
+        zcav = cav_pos * 20 * 0.025 / 1000
         value = np.random.poisson(80 * self.fpga.count_time)
-        values = _multi_gaussian(xpos,self._x_positions,self._x_sigmas) * _multi_gaussian(ypos,self._y_positions,self._y_sigmas)*_multi_gaussian(zpos,self._z_positions,self._z_sigmas)
+        values = (_multi_gaussian(xpos,self._x_positions,self._x_sigmas) * 
+                 _multi_gaussian(ypos,self._y_positions,self._y_sigmas) *
+                 _multi_gaussian(zpos,self._z_positions,self._z_sigmas) *
+                 _multi_gaussian(zcav,self._cav_positions,self._cav_sigmas))
         value += np.random.poisson(np.sum(self._amplitudes*values) * self.fpga.count_time)
         data = DummyData(np.tile(value,n))
 
