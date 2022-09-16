@@ -10,7 +10,7 @@ import datetime as dt
 from pathlib import Path
 import lmfit as lm
 import logging as log
-from apis.dummy import fpga_base_dummy, fpga_cryo_dummy, objective_dummy
+from apis.dummy import fpga_base, fpga_cryo, objective
 from numpy.typing import NDArray
 
 from apis.scanner import Scanner
@@ -48,9 +48,9 @@ dpg = rdpg.dpg
 log.basicConfig(format='%(levelname)s:%(message)s ', level=log.INFO)
 
 # Setup real control
-log.warning("Using Dummy Controls")
-fpga = fpga_cryo_dummy.DummyCryoFPGA()
-obj = objective_dummy.DummyObjective()
+log.warning("Using Real Controls")
+fpga = fpga_cryo.CryoFPGA()
+obj = objective.Objective()
 
 # Setup counts data
 counts_data = {'counts':[0],
