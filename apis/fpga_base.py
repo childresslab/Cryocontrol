@@ -6,17 +6,20 @@
 import numpy as np
 from nifpga.session import Session
 
+class FPGAValueError(Exception):
+    pass
+
 # Functions for converting between fpga bits and volts
 def _volts_to_bits(voltage, vmax, bit_depth):
     if np.abs(voltage) > vmax:
-        raise ValueError("Given voltage outside of given max voltage.")
+        raise FPGAValueError("Given voltage outside of given max voltage.")
     if voltage == vmax:
         return 2**(bit_depth - 1) - 1
     return int(np.round(voltage/vmax * (2**(bit_depth-1)-1) + (0.5 if voltage > 0 else -0.5)))
 
 def _bits_to_volts(bits, vmax, bit_depth):
     if np.abs(bits) > 2**(bit_depth-1):
-        raise ValueError("Given int outside binary depth range.")
+        raise FPGAValueError("Given int outside binary depth range.")
     if bits == -2**(bit_depth-1):
         return -vmax
     return (bits - (0.5 * np.sign(bits))) / (2**(bit_depth-1) - 1) * vmax
@@ -40,7 +43,7 @@ def _within(value,vmin,vmax):
         weather the value is within the given bounds.
     """
     if vmin > vmax:
-        raise ValueError("Range minimum must be less than range maximum.")
+        raise FPGAValueError("Range minimum must be less than range maximum.")
     return (value >= vmin and value <= vmax)
 
 class NiFPGA():
@@ -186,7 +189,7 @@ class NiFPGA():
         vranges = self.get_AO_range(chns)
         for i,(v,vrange) in enumerate(zip(vs,vranges)):
             if not _within(v,*vrange):
-                raise ValueError(f"Given voltage {v} outside range {vrange} on chn {chns[i]}")
+                raise FPGAValueError(f"Given voltage {v} outside range {vrange} on chn {chns[i]}")
         for chn,v in zip(chns,vs):
             try:
                 self._fpga.registers[f"AO{chn}"].write(_volts_to_bits(v,self._vmax,self._bit_depth))
