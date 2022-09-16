@@ -99,7 +99,11 @@ class DummyFIFO():
                  _multi_gaussian(zcav,self._cav_positions,self._cav_sigmas))
         value += np.random.poisson(np.sum(self._amplitudes*values) * self.fpga.count_time)
         data = DummyData(np.tile(value,n))
-        sleep((self.fpga.wait_after_ao + self.fpga.count_time)/1000)
+        dtime = (self.fpga.wait_after_ao + self.fpga.count_time)
+        if dtime > 10:
+            sleep(dtime/1000)
+        else:
+            sleep(0)
         return data
 
     def configure(self,size):

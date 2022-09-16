@@ -1088,6 +1088,7 @@ def do_cav_scan_step():
         else:
             dpg.set_axis_limits_auto("cav_count_y")
         set_cav_pos(*position_register["temp_cav_position"])
+        fpga.set_ao_wait(pzt_tree["Scan/JPE/Wait Time (ms)"],write=False)
         
 
     jpe_cav_scan._init_func = init
