@@ -1663,9 +1663,36 @@ def fit_jpe_optim(position:NDArray[np.float64],counts:NDArray[np.float64]) -> lm
     lm.model.ModelResult
         The fit result object from lmfit.
     """
-    model = lm.models.QuadraticModel()
+    model = lm.models.GaussianModel()
     params = model.guess(counts,x=position)
-    params['a'].set(max=0)
+    model = lm.models.GaussianModel() + lm.models.ConstantModel()
+    params['center'].set(min=np.min(position),max=np.max(position))
+    params.add('c',value=np.min(counts))
+    # Probably more annoying to do it right.
+    weights = 1/np.sqrt(np.array([count if count > 0 else 1 for count in counts]))
+    return model.fit(counts,params,x=position,weights=weights)
+
+def fit_cav_optim(position:NDArray[np.float64],counts:NDArray[np.float64]) -> lm.model.ModelResult:
+    """
+    Fit a quadratic to the given data, for optimizing the galvo position.
+
+    Parameters
+    ----------
+    position : NDArray[np.float64]
+        The array containing the position data
+    counts : NDArray[np.float64]
+        The array containing the counts data
+
+    Returns
+    -------
+    lm.model.ModelResult
+        The fit result object from lmfit.
+    """
+    model = lm.models.LorentzianModel()
+    params = model.guess(counts,x=position)
+    model = lm.models.LorentzianModel() + lm.models.ConstantModel()
+    params['center'].set(min=np.min(position),max=np.max(position))
+    params.add('c',value=np.min(counts))
     # Probably more annoying to do it right.
     weights = 1/np.sqrt(np.array([count if count > 0 else 1 for count in counts]))
     return model.fit(counts,params,x=position,weights=weights)
@@ -1758,11 +1785,8 @@ def single_optimize_run():
         positions = jpe_scanner_x.positions[0]
         fit_x = fit_jpe_optim(positions,results)
         vals = fit_x.best_values
-        # Get the peak x based on the quadratic fit results.
-        optim = -vals['b']/(2*vals['a'])
-        # Fix the ideal position to be within the bounds of the scan.
-        optim = min(optim,np.max(positions))
-        optim = max(optim,np.min(positions))
+        optim = vals['center']
+
         # If the desired position is outside range, we just use the starting
         # position.
         try:
@@ -1811,9 +1835,7 @@ def single_optimize_run():
         positions = jpe_scanner_y.positions[0]
         fit_y = fit_galvo_optim(positions,results)
         vals = fit_y.best_values
-        optim = -vals['b']/(2*vals['a'])
-        optim = min(optim,np.max(positions))
-        optim = max(optim,np.min(positions))
+        optim = vals['center']
         try:
             set_jpe_xy(fpga.get_jpe_pzs()[0],optim)
         except FPGAValueError:
@@ -1948,12 +1970,9 @@ def optimize_cav():
         to the optimal position. Then we start a fine scan.
         """
         positions = cav_scanner_fine.positions[0]
-        fit_results = fit_jpe_optim(positions,results)
+        fit_results = fit_cav_optim(positions,results)
         vals = fit_results.best_values
-        optim = -vals['b']/(2*vals['a'])
-        # Fix the ideal position to be within the bounds of the scan.
-        optim = min(optim,np.max(positions))
-        optim = max(optim,np.min(positions))
+        optim=vals['center']
         # If the desired position is outside range, we just use the starting
         # position.
         try:
