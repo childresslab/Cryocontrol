@@ -1833,7 +1833,7 @@ def single_optimize_run():
         and galvo ranges.
         """
         positions = jpe_scanner_y.positions[0]
-        fit_y = fit_galvo_optim(positions,results)
+        fit_y = fit_jpe_optim(positions,results)
         vals = fit_y.best_values
         optim = vals['center']
         try:
