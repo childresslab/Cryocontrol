@@ -17,6 +17,8 @@ from apis.scanner import Scanner
 from apis.fpga_cryo import CryoFPGA, FPGAValueError
 from apis.objective_control import Objective
 from interfaces.hist_plot import mvHistPlot
+from interfaces.counter import CounterInterface
+from interfaces.galvo import GalvoInterface
 
 import apis.rdpg as rdpg
 from apis.jpe_coord_convert import JPECoord
@@ -45,12 +47,39 @@ dpg = rdpg.dpg
 # that then combine together into one file. However that requires
 # figuring out how to properly share the instrument/data between files
 # which will be a bit tricky...
-log.basicConfig(format='%(levelname)s:%(message)s ', level=log.INFO)
+log.basicConfig(format='%(levelname)s:%(message)s ', level=log.DEBUG)
 
-# Setup real control
+# Setup control, devices should be defined outside interfaces to allow interuse
 log.warning("Using Dummy Controls")
 fpga = fpga_cryo_dummy.DummyCryoFPGA()
 obj = objective_dummy.DummyObjective()
+
+interfaces = {}
+
+def set_interfaces(caller:str,state:bool) -> None:
+    if caller not in interfaces.keys():
+        raise ValueError(f"{caller} not in dict of interfaces: {list(interfaces.keys())}")
+    for name,interface in interfaces.items():
+        if state:
+            log.debug("Enabling {name} controls.")
+        else:
+            log.debug("Disabling {name} controls.")
+        interface.set_controls(state)
+    interfaces[caller].set_params(state)
+
+counter = CounterInterface(set_interfaces,fpga)
+get_count = counter.get_count
+abort_counts = counter.abort_counts
+plot_counts = counter.plot_counts
+start_counts = counter.start_counts
+interfaces['counter'] = counter
+
+galvo = GalvoInterface(set_interfaces,fpga,counter)
+set_galvo = galvo.set_galvo
+galvo_plot = galvo.plot
+galvo_controls = galvo.controls
+galvo_params = galvo.params
+interfaces['galvo'] = galvo
 
 # Setup counts data
 counts_data = {'counts':[0],
@@ -61,266 +90,268 @@ position_register = {"temp_galvo_position":fpga.get_galvo()}
 #################
 # Galvo Control #
 #################
-galvo_plot = mvHistPlot("Galvo Plot",True,None,True,True,1000,0,300,50,'viridis',True,1,1E9,50,50)
-def set_galvo(x:float,y:float,write:bool=True) -> None:
-    """
-    Sets the galvo position, keeping track of updating the cursor position
-    and position read out
+# galvo_plot = mvHistPlot("Galvo Plot",True,None,True,True,1000,0,300,50,'viridis',True,1,1E9,50,50)
+# def set_galvo(x:float,y:float,write:bool=True) -> None:
+#     """
+#     Sets the galvo position, keeping track of updating the cursor position
+#     and position read out
 
-    Parameters
-    ----------
-    x : float
-        new x position of the galvo
-    y : float
-        new y position of the galvo
-    write : bool, optional
-        wether to immediately update update the position from
-        the fpga by quickly pulsing, slightly slower so set to False if 
-        your next step is to pulse or count, by default True
-    """
-    # If we only changed one axis, get the other's value
-    if (x is None or y is None):
-        galvo_pos = fpga.get_galvo()
-        if x is None:
-            x = galvo_pos[0]
-        if y is None:
-            y = galvo_pos[1]
-    # Update the actual position
-    fpga.set_galvo(x,y,write=write)
-    # Update the cursor position
-    galvo_plot.set_cursor([x,y])
-    # Update the readout position
-    galvo_tree["Galvo/Position"] = [x,y]
+#     Parameters
+#     ----------
+#     x : float
+#         new x position of the galvo
+#     y : float
+#         new y position of the galvo
+#     write : bool, optional
+#         wether to immediately update update the position from
+#         the fpga by quickly pulsing, slightly slower so set to False if 
+#         your next step is to pulse or count, by default True
+#     """
+#     # If we only changed one axis, get the other's value
+#     if (x is None or y is None):
+#         galvo_pos = fpga.get_galvo()
+#         if x is None:
+#             x = galvo_pos[0]
+#         if y is None:
+#             y = galvo_pos[1]
+#     # Update the actual position
+#     fpga.set_galvo(x,y,write=write)
+#     # Update the cursor position
+#     galvo_plot.set_cursor([x,y])
+#     # Update the readout position
+#     galvo_tree["Galvo/Position"] = [x,y]
 
-def man_set_galvo(*args):
-    """
-    Callback for when the galvo position is manually updated in the GUI.
-    Simply calls `set_galvo` with the new position.
-    """
-    pos = galvo_tree["Galvo/Position"]
-    write = not dpg.get_value("count")
-    set_galvo(pos[0],pos[1],write=write)
+# def man_set_galvo(*args):
+#     """
+#     Callback for when the galvo position is manually updated in the GUI.
+#     Simply calls `set_galvo` with the new position.
+#     """
+#     pos = galvo_tree["Galvo/Position"]
+#     write = not dpg.get_value("count")
+#     set_galvo(pos[0],pos[1],write=write)
 
-def galvo(y:float,x:float) -> float:
-    """
-    Scanning function for the galvo, sets the position along y and x 
-    (note flipped order) and then counts for the amount of time set in the GUI.
+# def galvo(y:float,x:float) -> float:
+#     """
+#     Scanning function for the galvo, sets the position along y and x 
+#     (note flipped order) and then counts for the amount of time set in the GUI.
 
-    Parameters
-    ----------
-    y : float
-        y position to get counts at.
-    x : float
-        x position to get counts at.
+#     Parameters
+#     ----------
+#     y : float
+#         y position to get counts at.
+#     x : float
+#         x position to get counts at.
 
-    Returns
-    -------
-    float
-        the count rate acquired
-    """
-    log.debug(f"Set galvo to ({x},{y}) V.")
-    set_galvo(x,y,write=False)
-    count = get_count(galvo_tree["Scan/Count Time (ms)"])
-    log.debug(f"Got count rate of {count}.")
-    return count
+#     Returns
+#     -------
+#     float
+#         the count rate acquired
+#     """
+#     log.debug(f"Set galvo to ({x},{y}) V.")
+#     set_galvo(x,y,write=False)
+#     count = get_count(galvo_tree["Scan/Count Time (ms)"])
+#     log.debug(f"Got count rate of {count}.")
+#     return count
 
-def get_count(time:float) -> float:
-    """
-    Gets the count rate at the current position, appending it to the stored
-    counts data if the current GUI state calls for it. Also updates
-    the AI1 position in that case.
+# Encapsulated
+# def get_count(time:float) -> float:
+#     """
+#     Gets the count rate at the current position, appending it to the stored
+#     counts data if the current GUI state calls for it. Also updates
+#     the AI1 position in that case.
 
-    Parameters
-    ----------
-    time : float
-        Time to count for in ms
+#     Parameters
+#     ----------
+#     time : float
+#         Time to count for in ms
 
-    Returns
-    -------
-    float
-        The acquired count rate
-    """
-    try:
-        count = fpga.just_count(time)
-    except TimeoutError as e:
-        fpga.write_register('Start FPGA 1', 0)
-        raise e
-    draw_count(count)
-    log.debug(f"Got count rate of {count}.")
-    if count_tree["Counts/Plot Scan Counts"] or dpg.get_value("count"):
-        counts_data['counts'].append(count)
-        counts_data['AI1'].append(fpga.get_AI_volts([1])[0])
-        counts_data['time'].append(datetime.now().timestamp())
-    return count
+#     Returns
+#     -------
+#     float
+#         The acquired count rate
+#     """
+#     try:
+#         count = fpga.just_count(time)
+#     except TimeoutError as e:
+#         fpga.write_register('Start FPGA 1', 0)
+#         raise e
+#     draw_count(count)
+#     log.debug(f"Got count rate of {count}.")
+#     if count_tree["Counts/Plot Scan Counts"] or dpg.get_value("count"):
+#         counts_data['counts'].append(count)
+#         counts_data['AI1'].append(fpga.get_AI_volts([1])[0])
+#         counts_data['time'].append(datetime.now().timestamp())
+#     return count
 
-def toggle_AI(sender,user,app):
-    if user:
-        dpg.show_item("AI1_series")
-        dpg.show_item("AI1_series2")
-        dpg.show_item("AI1_series3")
-    else:
-        dpg.hide_item("AI1_series")
-        dpg.hide_item("AI1_series2")
-        dpg.hide_item("AI1_series3")
+# Encapsulated
+# def toggle_AI(sender,user,app):
+#     if user:
+#         dpg.show_item("AI1_series")
+#         dpg.show_item("AI1_series2")
+#         dpg.show_item("AI1_series3")
+#     else:
+#         dpg.hide_item("AI1_series")
+#         dpg.hide_item("AI1_series2")
+#         dpg.hide_item("AI1_series3")
 
 
 # Base initialization of the galvo scanner object. Using the above `galvo` function
 # for scanning.
-galvo_scan = Scanner(galvo,[0,0],[1,1],[50,50],[],[],float,['y','x'],default_result=-1)
+# galvo_scan = Scanner(galvo,[0,0],[1,1],[50,50],[],[],float,['y','x'],default_result=-1)
 
-def start_scan(sender,app_data,user_data):
-    """
-    Callback function that starts the galvo scan. Taking care of updating
-    all the scan parameters.
+# def start_scan(sender,app_data,user_data):
+#     """
+#     Callback function that starts the galvo scan. Taking care of updating
+#     all the scan parameters.
 
-    Parameters
-    ----------
-    Called through DPG callback, no need...
-    """
-    if not dpg.get_value("galvo_scan"):
-        return -1
-    abort_counts()
-    steps = galvo_tree["Scan/Points"]
-    galvo_scan.steps = steps[1::-1]
-    galvo_scan.centers = galvo_tree["Scan/Centers (V)"][1::-1]
-    galvo_scan.spans = galvo_tree["Scan/Spans (V)"][1::-1]
+#     Parameters
+#     ----------
+#     Called through DPG callback, no need...
+#     """
+#     if not dpg.get_value("galvo_scan"):
+#         return -1
+#     abort_counts()
+#     steps = galvo_tree["Scan/Points"]
+#     galvo_scan.steps = steps[1::-1]
+#     galvo_scan.centers = galvo_tree["Scan/Centers (V)"][1::-1]
+#     galvo_scan.spans = galvo_tree["Scan/Spans (V)"][1::-1]
     
-    def init():
-        """
-        Initialization callback for the scanner.
-        """
-        # Set FPGA wait time
-        fpga.set_ao_wait(galvo_tree["Scan/Wait Time (ms)"],write=False)
-        # Get spans and steps of scan to update plot range
-        pos = galvo_scan._get_positions()
-        xmin = np.min(pos[1])
-        xmax = np.max(pos[1])
-        ymin = np.min(pos[0])
-        ymax = np.max(pos[0])
-        galvo_plot.set_size(int(galvo_scan.steps[0]),int(galvo_scan.steps[1]))
-        galvo_plot.set_bounds(xmin,xmax,ymin,ymax)
-        # Store the current position of the galvo for reseting later
-        position_register["temp_galvo_position"] = fpga.get_galvo()
-        for controls in [galvo_controls,optim_controls,objective_controls,piezo_controls]:
-            for control in controls:
-                if control != "galvo_scan":
-                    dpg.disable_item(control)
-        for param in galvo_params:
-            dpg.disable_item(param)
-        for plot in [galvo_plot,pzt_plot,obj_plot]:
-            plot.disable_cursor()
+#     def init():
+#         """
+#         Initialization callback for the scanner.
+#         """
+#         # Set FPGA wait time
+#         fpga.set_ao_wait(galvo_tree["Scan/Wait Time (ms)"],write=False)
+#         # Get spans and steps of scan to update plot range
+#         pos = galvo_scan._get_positions()
+#         xmin = np.min(pos[1])
+#         xmax = np.max(pos[1])
+#         ymin = np.min(pos[0])
+#         ymax = np.max(pos[0])
+#         galvo_plot.set_size(int(galvo_scan.steps[0]),int(galvo_scan.steps[1]))
+#         galvo_plot.set_bounds(xmin,xmax,ymin,ymax)
+#         # Store the current position of the galvo for reseting later
+#         position_register["temp_galvo_position"] = fpga.get_galvo()
+#         for controls in [galvo_controls,optim_controls,objective_controls,piezo_controls]:
+#             for control in controls:
+#                 if control != "galvo_scan":
+#                     dpg.disable_item(control)
+#         for param in galvo_params:
+#             dpg.disable_item(param)
+#         for plot in [galvo_plot,pzt_plot,obj_plot]:
+#             plot.disable_cursor()
     
-    def abort(i,imax,idx,pos,res):
-        """
-        Abort callback for the scanner. Just checks if the scan button is still
-        checked, allowing for cancelling of the scan.
-        """
-        return not dpg.get_value("galvo_scan")
+#     def abort(i,imax,idx,pos,res):
+#         """
+#         Abort callback for the scanner. Just checks if the scan button is still
+#         checked, allowing for cancelling of the scan.
+#         """
+#         return not dpg.get_value("galvo_scan")
 
-    def prog(i,imax,idx,pos,res):
-        """
-        Progress callback for the scanner. Run after every acquisition point
-        """
-        # update the progress bar of the GUI
-        log.debug("Setting Progress Bar")
-        dpg.set_value("pb",(i+1)/imax)
-        dpg.configure_item("pb",overlay=f"Galvo Scan {i+1}/{imax}")
-        # Check if we want to update the plot after every point
-        # Otherwise only every line
-        if galvo_tree["Plot/Update Every Point"]:
-            check = True
-        else:
-            check = (not (i+1) % galvo_tree["Scan/Points"][0]) or (i+1)==imax
-        if check:
-            log.debug("Updating Galvo Scan Plot")
-            # Format data for the plot
-            plot_data = np.copy(np.flipud(galvo_scan.results))
-            galvo_plot.autoscale = galvo_tree["Plot/Autoscale"]
-            galvo_plot.nbin = galvo_tree["Plot/N Bins"]
-            galvo_plot.update_plot(plot_data)
-            if count_tree["Counts/Plot Scan Counts"]:
-                plot_counts()
+#     def prog(i,imax,idx,pos,res):
+#         """
+#         Progress callback for the scanner. Run after every acquisition point
+#         """
+#         # update the progress bar of the GUI
+#         log.debug("Setting Progress Bar")
+#         dpg.set_value("pb",(i+1)/imax)
+#         dpg.configure_item("pb",overlay=f"Galvo Scan {i+1}/{imax}")
+#         # Check if we want to update the plot after every point
+#         # Otherwise only every line
+#         if galvo_tree["Plot/Update Every Point"]:
+#             check = True
+#         else:
+#             check = (not (i+1) % galvo_tree["Scan/Points"][0]) or (i+1)==imax
+#         if check:
+#             log.debug("Updating Galvo Scan Plot")
+#             # Format data for the plot
+#             plot_data = np.copy(np.flipud(galvo_scan.results))
+#             galvo_plot.autoscale = galvo_tree["Plot/Autoscale"]
+#             galvo_plot.nbin = galvo_tree["Plot/N Bins"]
+#             galvo_plot.update_plot(plot_data)
+#             if counter.tree["Counts/Plot Scan Counts"]:
+#                 plot_counts()
 
-    def finish(results,completed):
-        """
-        Finish callback for the scanner.
-        """
-        for controls in [galvo_controls,optim_controls,objective_controls,piezo_controls]:
-            for control in controls:
-                    dpg.enable_item(control)
-        for param in galvo_params:
-            dpg.enable_item(param)
-        for plot in [galvo_plot,pzt_plot,obj_plot]:
-            plot.enable_cursor()
-        # Uncheck scan button, indicating that we're done
-        dpg.set_value("galvo_scan",False)
-        # Reset the galvo to it's position at the start of the scan
-        set_galvo(*position_register["temp_galvo_position"],write=True)
-        # If autosave set, save the scan data.
-        if dpg.get_value("auto_save"):
-            save_galvo_scan()
-        fpga.set_ao_wait(count_tree["Counts/Wait Time (ms)"],write=False)
+#     def finish(results,completed):
+#         """
+#         Finish callback for the scanner.
+#         """
+#         for controls in [galvo_controls,optim_controls,objective_controls,piezo_controls]:
+#             for control in controls:
+#                     dpg.enable_item(control)
+#         for param in galvo_params:
+#             dpg.enable_item(param)
+#         for plot in [galvo_plot,pzt_plot,obj_plot]:
+#             plot.enable_cursor()
+#         # Uncheck scan button, indicating that we're done
+#         dpg.set_value("galvo_scan",False)
+#         # Reset the galvo to it's position at the start of the scan
+#         set_galvo(*position_register["temp_galvo_position"],write=True)
+#         # If autosave set, save the scan data.
+#         if dpg.get_value("auto_save"):
+#             save_galvo_scan()
+#         fpga.set_ao_wait(counter.tree["Counts/Wait Time (ms)"],write=False)
 
 
-    # Setup the scanner
-    galvo_scan._init_func = init
-    galvo_scan._abort_func = abort
-    galvo_scan._prog_func = prog
-    galvo_scan._finish_func = finish
-    # Run the scan in a new thread
-    galvo_scan.run_async()
+#     # Setup the scanner
+#     galvo_scan._init_func = init
+#     galvo_scan._abort_func = abort
+#     galvo_scan._prog_func = prog
+#     galvo_scan._finish_func = finish
+#     # Run the scan in a new thread
+#     galvo_scan.run_async()
 
-def get_galvo_range(*args):
-    """
-    Callback for querying the scan range from the galvo plot. Or just 
-    copying the galvo position as the center of the scan.
-    """
-    # If plot is queried, copy full scan area
-    xmin,xmax,ymin,ymax = galvo_plot.query_plot()
-    if xmin is not None:
-        new_centers = [(xmin+xmax)/2, (ymin+ymax)/2]
-        new_spans = [xmax-xmin, ymax-ymin]
-        galvo_tree["Scan/Centers (V)"] = new_centers
-        galvo_tree["Scan/Spans (V)"] = new_spans
-    # Otherwise, make the center of the scan the current position
-    else:
-        galvo_tree["Scan/Centers (V)"] = galvo_tree["Galvo/Position"]
+# def get_galvo_range(*args):
+#     """
+#     Callback for querying the scan range from the galvo plot. Or just 
+#     copying the galvo position as the center of the scan.
+#     """
+#     # If plot is queried, copy full scan area
+#     xmin,xmax,ymin,ymax = galvo_plot.query_plot()
+#     if xmin is not None:
+#         new_centers = [(xmin+xmax)/2, (ymin+ymax)/2]
+#         new_spans = [xmax-xmin, ymax-ymin]
+#         galvo_tree["Scan/Centers (V)"] = new_centers
+#         galvo_tree["Scan/Spans (V)"] = new_spans
+#     # Otherwise, make the center of the scan the current position
+#     else:
+#         galvo_tree["Scan/Centers (V)"] = galvo_tree["Galvo/Position"]
 
-def guess_galvo_time(*args):
-    """
-    Update the estimated scan time from the number of points and count times.
-    """
-    pts = galvo_tree["Scan/Points"]
-    ctime = galvo_tree["Scan/Count Time (ms)"] + galvo_tree["Scan/Wait Time (ms)"]
-    scan_time = pts[0] * pts[1] * ctime / 1000
-    time_string = str(dt.timedelta(seconds=scan_time)).split(".")[0]
-    galvo_tree["Scan/Estimated Time"] = time_string
+# def guess_galvo_time(*args):
+#     """
+#     Update the estimated scan time from the number of points and count times.
+#     """
+#     pts = galvo_tree["Scan/Points"]
+#     ctime = galvo_tree["Scan/Count Time (ms)"] + galvo_tree["Scan/Wait Time (ms)"]
+#     scan_time = pts[0] * pts[1] * ctime / 1000
+#     time_string = str(dt.timedelta(seconds=scan_time)).split(".")[0]
+#     galvo_tree["Scan/Estimated Time"] = time_string
 
-def galvo_cursor_callback(sender,point):
-    """Keep the galvo position within range on the cursor.
+# def galvo_cursor_callback(sender,point):
+#     """Keep the galvo position within range on the cursor.
 
-    Parameters
-    ----------
-    point : list[float] 
-        The (x,y) position of the cursor, to be limited.
+#     Parameters
+#     ----------
+#     point : list[float] 
+#         The (x,y) position of the cursor, to be limited.
 
-    Returns
-    -------
-    list[float]
-        The updated position, with all values between [-10,10]
-    """
-    if point[0] < -10:
-        point[0] = -10
-    if point[0] > 10:
-        point[0] = 10
-    if point[1] < -10:
-        point[1] = -10
-    if point[1] > 10:
-        point[1] = 10
-    write = not dpg.get_value("count")
-    set_galvo(point[0],point[1],write=write)
+#     Returns
+#     -------
+#     list[float]
+#         The updated position, with all values between [-10,10]
+#     """
+#     if point[0] < -10:
+#         point[0] = -10
+#     if point[0] > 10:
+#         point[0] = 10
+#     if point[1] < -10:
+#         point[1] = -10
+#     if point[1] > 10:
+#         point[1] = 10
+#     write = not dpg.get_value("count")
+#     set_galvo(point[0],point[1],write=write)
 
-galvo_plot.cursor_callback = galvo_cursor_callback
+# galvo_plot.cursor_callback = galvo_cursor_callback
 
 # Saving Scans
 def choose_save_dir(*args):
@@ -337,174 +368,183 @@ def set_save_dir(sender,chosen_dir,user_data):
     """
     dpg.set_value("save_dir",chosen_dir['file_path_name'])
 
-def save_galvo_scan(*args):
-    """
-    Save the scan using the scanner save function. Saves to the filename
-    set by the directory and filename set in the GUI.
-    """
-    path = Path(dpg.get_value("save_dir"))
-    filename = dpg.get_value("save_galvo_file")
-    path /= filename
-    as_npz = not (".csv" in filename)
-    header = galvo_scan.gen_header("Galvo Scan")
-    galvo_scan.save_results(str(path),as_npz=as_npz,header=header)
+# Encapsulated
+# def save_galvo_scan(*args):
+#     """
+#     Save the scan using the scanner save function. Saves to the filename
+#     set by the directory and filename set in the GUI.
+#     """
+#     path = Path(dpg.get_value("save_dir"))
+#     filename = dpg.get_value("save_galvo_file")
+#     path /= filename
+#     as_npz = not (".csv" in filename)
+#     header = galvo_scan.gen_header("Galvo Scan")
+#     galvo_scan.save_results(str(path),as_npz=as_npz,header=header)
 
 ####################
 # Counting Control #
 ####################
-def clear_counts(*args):
-    """
-    Clear the stored counts data. Doesn't immediately update the plot. So
-    data will persist there.
-    """
-    counts_data['counts'] = []
-    counts_data['AI1'] = []
-    counts_data['time'] = []
+# Encapsulated
+# def clear_counts(*args):
+#     """
+#     Clear the stored counts data. Doesn't immediately update the plot. So
+#     data will persist there.
+#     """
+#     counts_data['counts'] = []
+#     counts_data['AI1'] = []
+#     counts_data['time'] = []
 
-def moving_average(values:NDArray[np.float64],window:int) -> NDArray[np.float64]:
-    """
-    Simple sliding window moving average. Could potentially be improved with
-    weighting or better edge handling.
+# Encapsulated
+# def moving_average(values:NDArray[np.float64],window:int) -> NDArray[np.float64]:
+#     """
+#     Simple sliding window moving average. Could potentially be improved with
+#     weighting or better edge handling.
 
-    Parameters
-    ----------
-    values : NDArray[np.float64]
-        The array of values to average over.
+#     Parameters
+#     ----------
+#     values : NDArray[np.float64]
+#         The array of values to average over.
     
-    window : int
-        The size of the window to average over.
+#     window : int
+#         The size of the window to average over.
         
 
-    Returns
-    -------
-    NDArray[np.float64]
-        The averaged data.
-    """
+#     Returns
+#     -------
+#     NDArray[np.float64]
+#         The averaged data.
+#     """
 
-    return np.average(sliding_window_view(values, window_shape = window), axis=1)
+#     return np.average(sliding_window_view(values, window_shape = window), axis=1)
 
-def average_counts(times : NDArray[np.float64],
-                   counts : NDArray[np.float64],
-                   window : int) -> tuple[NDArray[np.float64],NDArray[np.float64]]:
-    """_summary_
+# Encapsulated
+# def average_counts(times : NDArray[np.float64],
+#                    counts : NDArray[np.float64],
+#                    window : int) -> tuple[NDArray[np.float64],NDArray[np.float64]]:
+#     """_summary_
 
-    Parameters
-    ----------
-    times : NDArray[np.float64]
-        Time data to be average
-    counts : NDArray[np.float64]
-        Counts data to be averaged
-    window : int
-        Averaging window size
+#     Parameters
+#     ----------
+#     times : NDArray[np.float64]
+#         Time data to be average
+#     counts : NDArray[np.float64]
+#         Counts data to be averaged
+#     window : int
+#         Averaging window size
 
-    Returns
-    -------
-    tuple[NDArray[np.float64],NDArray[np.float64]]
-        Averaged time and counts data
-    """
-    avg_times = moving_average(times,window)
-    avg_counts = moving_average(counts,window)
-    return avg_times,avg_counts
+#     Returns
+#     -------
+#     tuple[NDArray[np.float64],NDArray[np.float64]]
+#         Averaged time and counts data
+#     """
+#     avg_times = moving_average(times,window)
+#     avg_counts = moving_average(counts,window)
+#     return avg_times,avg_counts
 
-def plot_counts(*args):
-    """
-    Update the count plots on various pages
-    """
-    # Truncate the count data down to the desired number of points
-    delta = len(counts_data['counts']) - count_tree["Counts/Max Points"]
-    while delta >= 0:
-        try:
-            counts_data['counts'].pop(0)
-            counts_data['AI1'].pop(0)
-            counts_data['time'].pop(0)
-            delta -= 1
-        except IndexError:
-            break
-    # Average the time and counts data
-    avg_time, avg_counts= average_counts(counts_data['time'],
-                                         counts_data['counts'],
-                                         min(len(counts_data['time']),
-                                             count_tree["Counts/Average Points"]))
-    # Update all the copies of the count plots.
-    dpg.set_value('counts_series',[rdpg.offset_timezone(counts_data['time']),counts_data['counts']])
-    dpg.set_value('avg_counts_series',[rdpg.offset_timezone(avg_time),avg_counts])
-    dpg.set_value('AI1_series',[rdpg.offset_timezone(counts_data['time']),counts_data['AI1']])
+# Encapsulated
+# def plot_counts(*args):
+#     """
+#     Update the count plots on various pages
+#     """
+#     # Truncate the count data down to the desired number of points
+#     delta = len(counts_data['counts']) - count_tree["Counts/Max Points"]
+#     while delta >= 0:
+#         try:
+#             counts_data['counts'].pop(0)
+#             counts_data['AI1'].pop(0)
+#             counts_data['time'].pop(0)
+#             delta -= 1
+#         except IndexError:
+#             break
+#     # Average the time and counts data
+#     avg_time, avg_counts= average_counts(counts_data['time'],
+#                                          counts_data['counts'],
+#                                          min(len(counts_data['time']),
+#                                              count_tree["Counts/Average Points"]))
+#     # Update all the copies of the count plots.
+#     dpg.set_value('counts_series',[rdpg.offset_timezone(counts_data['time']),counts_data['counts']])
+#     dpg.set_value('avg_counts_series',[rdpg.offset_timezone(avg_time),avg_counts])
+#     dpg.set_value('AI1_series',[rdpg.offset_timezone(counts_data['time']),counts_data['AI1']])
 
-def draw_count(val):
-    """
-    Prints the count rate in numbers in the special count rate window.
-    Sets the color according to some limits for our equipment.
-    Yellow warning for above 1 million
-    Red critical warning for above 10 million
-    """
-    if val > 1E6:
-        dpg.set_value("count_rate",f"{val:0.2G}")
-    else:
-        dpg.set_value("count_rate",f"{val:0.0f}")
-    if val > 1E7:
-        dpg.configure_item("count_rate",color=[255,0,0])
-    elif val > 1E6:
-        dpg.configure_item("count_rate",color=[250,189,47])
-    else:
-        dpg.configure_item("count_rate",color=[255,255,255])
+# Encapsulated
+# def draw_count(val):
+#     """
+#     Prints the count rate in numbers in the special count rate window.
+#     Sets the color according to some limits for our equipment.
+#     Yellow warning for above 1 million
+#     Red critical warning for above 10 million
+#     """
+#     if val > 1E6:
+#         dpg.set_value("count_rate",f"{val:0.2G}")
+#     else:
+#         dpg.set_value("count_rate",f"{val:0.0f}")
+#     if val > 1E7:
+#         dpg.configure_item("count_rate",color=[255,0,0])
+#     elif val > 1E6:
+#         dpg.configure_item("count_rate",color=[250,189,47])
+#     else:
+#         dpg.configure_item("count_rate",color=[255,255,255])
 
-def abort_counts():
-    """
-    Stop the couting with a small sleep time to ensure that the last
-    count opperation exists.
-    This is to be run before any scan starts, making sure to stop the ongoing
-    counting. 
-    """
-    if dpg.get_value("count"):
-        dpg.set_value("count",False)
-        sleep(count_tree["Counts/Count Time (ms)"]/1000)
+# Encapsulated
+# def abort_counts():
+#     """
+#     Stop the couting with a small sleep time to ensure that the last
+#     count opperation exists.
+#     This is to be run before any scan starts, making sure to stop the ongoing
+#     counting. 
+#     """
+#     if dpg.get_value("count"):
+#         dpg.set_value("count",False)
+#         sleep(count_tree["Counts/Count Time (ms)"]/1000)
 
-def start_counts():
-    """
-    Function triggered when enabling counts.
-    Starts a new thread that takes care of getting the count data and
-    updating the plot.
-    """
-    # If counts are disabled, don't do anything, thread will handle 
-    # stopping itself
-    if not dpg.get_value('count'):
-        return
+# Encapsulated
+# def start_counts():
+#     """
+#     Function triggered when enabling counts.
+#     Starts a new thread that takes care of getting the count data and
+#     updating the plot.
+#     """
+#     # If counts are disabled, don't do anything, thread will handle 
+#     # stopping itself
+#     if not dpg.get_value('count'):
+#         return
         
-    fpga.set_ao_wait(count_tree["Counts/Wait Time (ms)"],write=False)
-    # Function for the new thread to run
-    def count_func():
-        # Make a second thread for updating the plot
-        plot_thread = Thread(target=plot_counts)
-        # As long as we still want to count
-        while dpg.get_value("count"):
-            # Get the new count data
-            count = get_count(count_tree["Counts/Count Time (ms)"])
-            # If the plot isn't currently being updated update it.
-            if not plot_thread.is_alive():
-                plot_thread = Thread(target=plot_counts)
-                plot_thread.start()
+#     fpga.set_ao_wait(count_tree["Counts/Wait Time (ms)"],write=False)
+#     # Function for the new thread to run
+#     def count_func():
+#         # Make a second thread for updating the plot
+#         plot_thread = Thread(target=plot_counts)
+#         # As long as we still want to count
+#         while dpg.get_value("count"):
+#             # Get the new count data
+#             count = get_count(count_tree["Counts/Count Time (ms)"])
+#             # If the plot isn't currently being updated update it.
+#             if not plot_thread.is_alive():
+#                 plot_thread = Thread(target=plot_counts)
+#                 plot_thread.start()
 
-    # Start the thread
-    count_thread = Thread(target=count_func)
-    count_thread.start()
+#     # Start the thread
+#     count_thread = Thread(target=count_func)
+#     count_thread.start()
 
-def save_counts(*args):
-    """
-    Save the count data to a file.
-    Effectively only saves the plotted data.
-    """
-    path = Path(dpg.get_value("save_dir"))
-    filename = dpg.get_value("save_counts_file")
-    path /= filename
-    if '.npz' in filename:
-        np.savez(path,time=counts_data['time'],
-                      counts=counts_data['counts'],
-                      AI1=counts_data['AI1'])
-    else:
-        with path.open('w') as f:
-            f.write("Timestamp,Counts,AI1\n")
-            for d in zip(counts_data['time'],counts_data['counts'],counts_data['AI1']):
-                    f.write(f"{d[0]},{d[1]},{d[2]}\n")
+# Encapsulated
+# def save_counts(*args):
+#     """
+#     Save the count data to a file.
+#     Effectively only saves the plotted data.
+#     """
+#     path = Path(dpg.get_value("save_dir"))
+#     filename = dpg.get_value("save_counts_file")
+#     path /= filename
+#     if '.npz' in filename:
+#         np.savez(path,time=counts_data['time'],
+#                       counts=counts_data['counts'],
+#                       AI1=counts_data['AI1'])
+#     else:
+#         with path.open('w') as f:
+#             f.write("Timestamp,Counts,AI1\n")
+#             for d in zip(counts_data['time'],counts_data['counts'],counts_data['AI1']):
+#                     f.write(f"{d[0]},{d[1]},{d[2]}\n")
 
 ###################
 # Galvo Optimizer #
@@ -646,7 +686,7 @@ def single_optimize_run():
         optim_data['pos'].append(pos[0])
         # Update the plots
         dpg.set_value('optim_x_counts',[optim_data['pos'],optim_data['counts']])
-        if count_tree["Counts/Plot Scan Counts"]:
+        if counter.tree["Counts/Plot Scan Counts"]:
                     plot_counts()
 
     def finish_x(results,completed):
@@ -697,7 +737,7 @@ def single_optimize_run():
         optim_data['counts'].append(res)
         optim_data['pos'].append(pos[0])
         dpg.set_value('optim_y_counts',[optim_data['pos'],optim_data['counts']])
-        if count_tree["Counts/Plot Scan Counts"]:
+        if counter.tree["Counts/Plot Scan Counts"]:
             plot_counts()
 
     def finish_y(results,completed):
@@ -729,7 +769,7 @@ def single_optimize_run():
         new_axis = np.linspace(np.min(positions),np.max(positions),1000)
         fit_data = fit_y.eval(fit_y.params,x=new_axis)
         dpg.set_value('optim_y_fit',[new_axis,fit_data])
-        fpga.set_ao_wait(count_tree["Counts/Wait Time (ms)"],write=False)
+        fpga.set_ao_wait(counter.tree["Counts/Wait Time (ms)"],write=False)
 
 
     # Setup the y-scanner object.
@@ -873,7 +913,7 @@ def start_obj_scan(sender,app_data,user_data):
                 obj_plot.autoscale = obj_tree["Plot/Autoscale"]
                 obj_plot.nbin = obj_tree["Plot/N Bins"]
                 obj_plot.update_plot(plot_data)
-                if count_tree["Counts/Plot Scan Counts"]:
+                if counter.tree["Counts/Plot Scan Counts"]:
                     plot_counts()
 
     def finish(results,completed):
@@ -1004,7 +1044,7 @@ def get_obj_range():
     xmin,xmax,ymin,ymax = obj_plot.query_plot()
     if xmin is None:
         idx = 0 if obj_tree["Scan/Galvo/Axis"] == 'x' else 1
-        obj_tree["Scan/Galvo/Center (V)"] = galvo_tree["Galvo/Position"][idx]
+        obj_tree["Scan/Galvo/Center (V)"] = galvo.tree["Galvo/Position"][idx]
         obj_tree["Scan/Obj./Center (um)"] = obj_tree["Objective/Current Position (um)"]
     else:
         new_centers = [(xmin+xmax)/2, (ymin+ymax)/2]
@@ -1089,7 +1129,7 @@ def do_cav_scan_step():
             if pzt_tree['Plot/Autoscale']:
                 dpg.set_axis_limits_auto("cav_count_y")
                 dpg.fit_axis_data("cav_count_y")
-        if count_tree["Counts/Plot Scan Counts"]:
+        if counter.tree["Counts/Plot Scan Counts"]:
             plot_counts()
 
     def finish(results,completed):
@@ -1166,7 +1206,7 @@ def start_xy_scan():
             if check:
                 log.debug("Updating XY Scan Plot")
                 update_pzt_plot("manual",None,None)
-                if count_tree["Counts/Plot Scan Counts"]:
+                if counter.tree["Counts/Plot Scan Counts"]:
                     plot_counts()
 
     def finish(results,completed):
@@ -1185,7 +1225,7 @@ def start_xy_scan():
             log.warn("Couldn't Reset PZT Position.")
         if dpg.get_value("pzt_auto_save"):
             save_xy_scan()
-        fpga.set_ao_wait(count_tree["Counts/Wait Time (ms)"],write=False)
+        fpga.set_ao_wait(counter.tree["Counts/Wait Time (ms)"],write=False)
     jpe_xy_scan._init_func = init
     jpe_xy_scan._abort_func = abort
     jpe_xy_scan._prog_func = prog
@@ -1251,7 +1291,7 @@ def start_cav_scan():
         if pzt_tree['Plot/Autoscale']:
             dpg.set_axis_limits_auto("cav_count_y")
             dpg.fit_axis_data("cav_count_y")
-        if count_tree["Counts/Plot Scan Counts"]:
+        if counter.tree["Counts/Plot Scan Counts"]:
             plot_counts()
 
     def finish(results,completed):
@@ -1273,7 +1313,7 @@ def start_cav_scan():
         set_cav_pos(*position_register["temp_cav_position"],write=True)
         if dpg.get_value("pzt_auto_save"):
             save_cav_scan()
-        fpga.set_ao_wait(count_tree["Counts/Wait Time (ms)"],write=False)
+        fpga.set_ao_wait(counter.tree["Counts/Wait Time (ms)"],write=False)
 
     jpe_cav_scan._init_func = init
     jpe_cav_scan._abort_func = abort
@@ -1358,7 +1398,7 @@ def start_3d_scan():
             if check:
                 log.debug("Updating 3D Scan Plot")
                 update_pzt_plot("manual",None,None)
-                if count_tree["Counts/Plot Scan Counts"]:
+                if counter.tree["Counts/Plot Scan Counts"]:
                     plot_counts()
 
     def finish(results,completed):
@@ -1794,7 +1834,7 @@ def single_jpe_run():
         optim_data['pos'].append(pos[0])
         # Update the plots
         dpg.set_value('pzt_optim_x_counts',[optim_data['pos'],optim_data['counts']])
-        if count_tree["Counts/Plot Scan Counts"]:
+        if counter.tree["Counts/Plot Scan Counts"]:
                     plot_counts()
 
     def finish_x(results,completed):
@@ -1844,7 +1884,7 @@ def single_jpe_run():
         optim_data['counts'].append(res)
         optim_data['pos'].append(pos[0])
         dpg.set_value('pzt_optim_y_counts',[optim_data['pos'],optim_data['counts']])
-        if count_tree["Counts/Plot Scan Counts"]:
+        if counter.tree["Counts/Plot Scan Counts"]:
             plot_counts()
 
     def finish_y(results,completed):
@@ -1873,7 +1913,7 @@ def single_jpe_run():
         new_axis = np.linspace(np.min(positions),np.max(positions),1000)
         fit_data = fit_y.eval(fit_y.params,x=new_axis)
         dpg.set_value('pzt_optim_y_fit',[new_axis,fit_data])
-        fpga.set_ao_wait(count_tree["Counts/Wait Time (ms)"],write=False)
+        fpga.set_ao_wait(counter.tree["Counts/Wait Time (ms)"],write=False)
 
     # Setup the y-scanner object.
     jpe_scanner_y._init_func = init_y
@@ -1940,7 +1980,7 @@ def optimize_cav_fine(count=0):
         optim_data['pos'].append(pos[0])
         # Update the plots
         dpg.set_value('pzt_optim_cav_counts',[optim_data['pos'],optim_data['counts']])
-        if count_tree["Counts/Plot Scan Counts"]:
+        if counter.tree["Counts/Plot Scan Counts"]:
                     plot_counts()
     
     def finish_cav_fine(results,completed):
@@ -1964,7 +2004,7 @@ def optimize_cav_fine(count=0):
         new_axis = np.linspace(np.min(positions),np.max(positions),1000)
         fit_data = fit_results.eval(fit_results.params,x=new_axis)
         dpg.set_value('pzt_optim_cav_fit',[new_axis,fit_data])
-        fpga.set_ao_wait(count_tree["Counts/Wait Time (ms)"],write=False)
+        fpga.set_ao_wait(counter.tree["Counts/Wait Time (ms)"],write=False)
 
     cav_scanner_fine._init_func = init_cav_fine
     cav_scanner_fine._prog_func = prog_cav_fine
@@ -2014,7 +2054,7 @@ def optimize_cav_coarse():
         optim_data['pos'].append(pos[0])
         # Update the plots
         dpg.set_value('pzt_optim_cav_counts',[optim_data['pos'],optim_data['counts']])
-        if count_tree["Counts/Plot Scan Counts"]:
+        if counter.tree["Counts/Plot Scan Counts"]:
                     plot_counts()
 
     def finish_cav(results,completed):
@@ -2057,10 +2097,6 @@ with dpg.theme(tag="avg_count_theme"):
 ###############
 # Main Window #
 ###############
-#with dpg.window(label="Count Rate", tag="count_window",pos=[0,750],width=425):
-#    dpg.add_text('0',tag="count_rate",parent="count_window")
-#    dpg.bind_item_font("count_rate","massive_font")
-
 with dpg.window(label="Cryocontrol", tag='main_window'):
     ##################
     # Persistant Bar #
@@ -2075,7 +2111,7 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
             # Counts and Optimization
             with dpg.group(horizontal=True):
                 dpg.add_checkbox(tag="count", label="Count", callback=start_counts)
-                dpg.add_button(tag="clear_counts", label="Clear Counts",callback=clear_counts)
+                dpg.add_button(tag="clear_counts", label="Clear Counts",callback=counter.clear_counts)
                 dpg.add_button(tag="optimize", label="Optimize Galvo", callback=optimize_galvo)
             # Confocal Scan Control
             with dpg.group(horizontal=True):
@@ -2088,142 +2124,63 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
     # START TABS #
     ##############
     with dpg.tab_bar():
-        ###############
-        # COUNTER TAB #
-        ###############
+        # ###############
+        # # COUNTER TAB #
+        # ###############
         with dpg.tab(label="Counter"):
-            with dpg.group(horizontal=True):
-                    dpg.add_text("Filename:")
-                    dpg.add_input_text(tag="save_counts_file", default_value="counts.npz", width=200)
-                    dpg.add_button(tag="save_counts", label="Save Counts",callback=save_counts)
-            with dpg.group(horizontal=True,width=0):
-                with dpg.child_window(width=400,autosize_x=False,autosize_y=True,tag="count_tree"):
-                    count_tree = rdpg.TreeDict('count_tree','cryo_gui_settings/count_tree_save.csv')
-                    count_tree.add("Counts/Count Time (ms)", 10,
-                                   item_kwargs={'min_value':1,'min_clamped':True},
-                                   tooltip="How long the fpga acquires counts for.")
-                    count_tree.add("Counts/Wait Time (ms)", 1,
-                                   item_kwargs={'min_value':1,'min_clamped':True},
-                                   tooltip="How long the fpga waits before counting.")
-                    count_tree.add("Counts/Max Points", 100000,
-                                   item_kwargs={'on_enter':True,'min_value':1,'min_clamped':True,'step':100},
-                                   tooltip="How many plot points to display before cutting old ones.")
-                    count_tree.add("Counts/Average Points", 5, callback=plot_counts,
-                                   item_kwargs={'min_value':1,'min_clamped':True},
-                                   tooltip="Size of moving average window.")
-                    count_tree.add("Counts/Plot Scan Counts", True, 
-                                   callback=plot_counts,
-                                   tooltip="Wether to plot counts acquired during other scanning procedures.")
-                    count_tree.add("Counts/Show AI1", True, callback=toggle_AI)
-                with dpg.child_window(width=-1,autosize_y=True):
-                    with dpg.plot(label="Count Rate",width=-1,height=-1,tag="count_plot"):
-                        dpg.bind_font("plot_font") 
-                        # REQUIRED: create x and y axes
-                        dpg.add_plot_axis(dpg.mvXAxis, label="Time", time=True, tag="count_x")
-                        dpg.add_plot_axis(dpg.mvYAxis, label="Counts",tag="count_y")
-                        dpg.add_plot_axis(dpg.mvYAxis,label="Sync", tag="count_AI1",no_gridlines=True)
-                        dpg.add_line_series(rdpg.offset_timezone(counts_data['time']),
-                                            counts_data['counts'],
-                                            parent='count_y',label='counts', tag='counts_series')
-                        dpg.add_line_series(rdpg.offset_timezone(counts_data['time']),
-                                            counts_data['counts'],
-                                            parent='count_y',label='avg. counts', tag='avg_counts_series')
-                        dpg.add_line_series(rdpg.offset_timezone(counts_data['time']),
-                                            counts_data['AI1'],
-                                            parent='count_AI1',label='AI1', tag='AI1_series')
-                        dpg.add_plot_legend()
-                        dpg.bind_item_theme("counts_series","plot_theme_blue")
-                        dpg.bind_item_theme("avg_counts_series","avg_count_theme")
-                        dpg.bind_item_theme("AI1_series","plot_theme_purple")
+            counter.makeGUI(dpg.last_item())
+        # # Encapsulated
+        #     with dpg.group(horizontal=True):
+        #             dpg.add_text("Filename:")
+        #             dpg.add_input_text(tag="save_counts_file", default_value="counts.npz", width=200)
+        #             dpg.add_button(tag="save_counts", label="Save Counts",callback=count_interface.save_counts)
+        #     with dpg.group(horizontal=True,width=0):
+        #         with dpg.child_window(width=400,autosize_x=False,autosize_y=True,tag="count_tree"):
+        #             count_tree = rdpg.TreeDict('count_tree','cryo_gui_settings/count_tree_save.csv')
+        #             count_tree.add("Counts/Count Time (ms)", 10,
+        #                            item_kwargs={'min_value':1,'min_clamped':True},
+        #                            tooltip="How long the fpga acquires counts for.")
+        #             count_tree.add("Counts/Wait Time (ms)", 1,
+        #                            item_kwargs={'min_value':1,'min_clamped':True},
+        #                            tooltip="How long the fpga waits before counting.")
+        #             count_tree.add("Counts/Max Points", 100000,
+        #                            item_kwargs={'on_enter':True,'min_value':1,'min_clamped':True,'step':100},
+        #                            tooltip="How many plot points to display before cutting old ones.")
+        #             count_tree.add("Counts/Average Points", 5, callback=plot_counts,
+        #                            item_kwargs={'min_value':1,'min_clamped':True},
+        #                            tooltip="Size of moving average window.")
+        #             count_tree.add("Counts/Plot Scan Counts", True, 
+        #                            callback=plot_counts,
+        #                            tooltip="Wether to plot counts acquired during other scanning procedures.")
+        #             count_tree.add("Counts/Show AI1", True, callback=toggle_AI)
+        #         with dpg.child_window(width=-1,autosize_y=True):
+        #             with dpg.plot(label="Count Rate",width=-1,height=-1,tag="count_plot"):
+        #                 dpg.bind_font("plot_font") 
+        #                 # REQUIRED: create x and y axes
+        #                 dpg.add_plot_axis(dpg.mvXAxis, label="Time", time=True, tag="count_x")
+        #                 dpg.add_plot_axis(dpg.mvYAxis, label="Counts",tag="count_y")
+        #                 dpg.add_plot_axis(dpg.mvYAxis,label="Sync", tag="count_AI1",no_gridlines=True)
+        #                 dpg.add_line_series(rdpg.offset_timezone(counts_data['time']),
+        #                                     counts_data['counts'],
+        #                                     parent='count_y',label='counts', tag='counts_series')
+        #                 dpg.add_line_series(rdpg.offset_timezone(counts_data['time']),
+        #                                     counts_data['counts'],
+        #                                     parent='count_y',label='avg. counts', tag='avg_counts_series')
+        #                 dpg.add_line_series(rdpg.offset_timezone(counts_data['time']),
+        #                                     counts_data['AI1'],
+        #                                     parent='count_AI1',label='AI1', tag='AI1_series')
+        #                 dpg.add_plot_legend()
+        #                 dpg.bind_item_theme("counts_series","plot_theme_blue")
+        #                 dpg.bind_item_theme("avg_counts_series","avg_count_theme")
+        #                 dpg.bind_item_theme("AI1_series","plot_theme_purple")
+        #/Encapsulated
                         
         #############
         # GALVO TAB #
         #############
-        galvo_controls = ["galvo_tree_Galvo/Position",
-                          "galvo_scan"]
-        galvo_params = ["galvo_tree_Scan/Centers (V)",
-                        "galvo_tree_Scan/Spans (V)",
-                        "galvo_tree_Scan/Points",
-                        "galvo_tree_Scan/Count Time (ms)",
-                        "galvo_tree_Scan/Wait Time (ms)"]
         with dpg.tab(label="Galvo"):
-            with dpg.group(horizontal=True):
-                dpg.add_checkbox(tag="galvo_scan",label="Scan Galvo", callback=start_scan)
-                dpg.add_button(tag="query_plot",label="Copy Scan Params",callback=get_galvo_range)
-                dpg.add_text("Filename:")
-                dpg.add_input_text(tag="save_galvo_file", default_value="scan.npz", width=200)
-                dpg.add_button(tag="save_galvo_button", label="Save Scan",callback=save_galvo_scan)
-                dpg.add_checkbox(tag="auto_save_galvo", label="Auto")
-            with dpg.group(horizontal=True, width=0):
-                with dpg.child_window(width=400,autosize_x=False,autosize_y=True,tag="galvo_tree"):
-                    galvo_tree = rdpg.TreeDict('galvo_tree','cryo_gui_settings/scan_params_save.csv')
-                    galvo_tree.add("Galvo/Position",[float(f) for f in fpga.get_galvo()],
-                                    item_kwargs={'min_value':-10,
-                                                'max_value':10,
-                                                "min_clamped":True,
-                                                "max_clamped":True,
-                                                "on_enter":True},
-                                    callback=man_set_galvo)
-                    galvo_tree.add("Plot/Autoscale",False,tooltip="Autoscale the plot at each update")
-                    galvo_tree.add("Plot/N Bins",50,item_kwargs={'min_value':1,
-                                                                 'max_value':1000},
-                                   tooltip="Number of bins in plot histogram")
-                    galvo_tree.add("Plot/Update Every Point",False,
-                                   tooltip="Update the plot at every position vs each line, slows down scans.")
-                    galvo_tree.add("Scan/Centers (V)",[0.0,0.0],item_kwargs={'min_value':-10,
-                                                                             'max_value':10,
-                                                                             "min_clamped":True,
-                                                                             "max_clamped":True},
-                                    tooltip="Central position of scan in volts.")
-                    galvo_tree.add("Scan/Spans (V)", [1.0,1.0],item_kwargs={'min_value':-20,
-                                                                            'max_value':20,
-                                                                            "min_clamped":True,
-                                                                            "max_clamped":True},
-                                    tooltip="Width of scan in volts.")
-                    galvo_tree.add("Scan/Points", [100,100],item_kwargs={'min_value':0},
-                                callback=guess_galvo_time,
-                                tooltip="Number of points along the scan axes.")
-                    galvo_tree.add("Scan/Count Time (ms)", 10.0, item_kwargs={'min_value':0,
-                                                                              'max_value':1000,
-                                                                              'step':1},
-                                callback=guess_galvo_time,
-                                tooltip="How long the fpga counts at each position.")
-                    galvo_tree.add("Scan/Wait Time (ms)", 1.0,item_kwargs={'min_value':0,
-                                                                        'max_value':1000,
-                                                                        "step":1},
-                                callback=guess_galvo_time,
-                                tooltip="How long the fpga waits before counting, after moving.")
-                    galvo_tree.add("Scan/Estimated Time", "00:00:00", item_kwargs={'readonly':True},
-                                   save=False,
-                                   tooltip="Rough guess of how long scan will take = (count_time + wait_time)*Npts")
-                with dpg.group():
-                    galvo_plot.parent = dpg.last_item()
-                    galvo_plot.height = -330
-                    galvo_plot.scale_width = 335
-                    galvo_plot.make_gui()
-                    with dpg.child_window(width=-0,height=320):
-                        with dpg.plot(label="Count Rate",width=-1,height=300,tag="count_plot2"):
-                            dpg.bind_font("plot_font") 
-                            # REQUIRED: create x and y axes
-                            dpg.add_plot_axis(dpg.mvXAxis, label="x", time=True, tag="count_x2")
-                            dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="count_y2")
-                            dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="count_AI12",no_gridlines=True)
-                            dpg.add_line_series(rdpg.offset_timezone(counts_data['time']),
-                                                counts_data['counts'],
-                                                parent='count_y2',label='counts', tag='counts_series2')
-                            dpg.add_line_series(rdpg.offset_timezone(counts_data['time']),
-                                                counts_data['counts'],
-                                                parent='count_y2',label='avg. counts', tag='avg_counts_series2')
-                            dpg.add_line_series(rdpg.offset_timezone(counts_data['time']),
-                                                counts_data['AI1'],
-                                                parent='count_AI12',label='AI1', tag='AI1_series2')
-                            dpg.set_item_source('counts_series2','counts_series')
-                            dpg.set_item_source('avg_counts_series2','avg_counts_series')
-                            dpg.set_item_source('AI1_series2','AI1_series')
-                            dpg.bind_item_theme("counts_series2","plot_theme_blue")
-                            dpg.bind_item_theme("avg_counts_series2","avg_count_theme")
-                            dpg.bind_item_theme("AI1_series2","plot_theme_purple")
-                            dpg.add_plot_legend()
+            galvo.makeGUI(parent=dpg.last_item())
+
         #################
         # Optimizer Tab #
         #################
@@ -2568,8 +2525,8 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
 # Initialization #
 ##################
 # Load in tree values
-count_tree.load()
-galvo_tree.load()
+counter.tree.load()
+galvo.tree.load()
 optim_tree.load()
 obj_tree.load()
 pzt_tree.load()
@@ -2578,7 +2535,7 @@ pzt_optim_tree.load()
 galvo_position = fpga.get_galvo()
 cavity_position = fpga.get_cavity()
 jpe_position = fpga.get_jpe_pzs()
-galvo_tree["Galvo/Position"] = galvo_position
+galvo.tree["Galvo/Position"] = galvo_position
 galvo_plot.set_cursor(galvo_position)
 pzt_tree["Cavity/Position"] = cavity_position[0]
 # Enabling tilt will ensure that no sudden z0 position change occurs
@@ -2587,11 +2544,11 @@ pzt_tree["Cavity/Position"] = cavity_position[0]
 pzt_tree["JPE/Z0 Position"] = jpe_position[2]
 pzt_tree["JPE/XY Position"] = jpe_position[:2]
 pzt_tree["JPE/Z Volts"] = pz_conv.zs_from_cart(jpe_position)
-toggle_AI(None, count_tree["Counts/Show AI1"], None)
+counter.toggle_AI(None, counter.tree["Counts/Show AI1"], None)
 toggle_tilt(None,pzt_tree["JPE/Tilt/Enable"], None)
 
 guess_pzt_times()
-guess_galvo_time()
+galvo.guess_galvo_time()
 guess_obj_time()
 draw_bounds()
 pzt_plot.set_cursor(jpe_position[:2])
