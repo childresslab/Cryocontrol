@@ -1716,6 +1716,7 @@ def optimize_jpe(*args):
     Run multiple iterations of the optimization routine. To narrow in on the
     optimal position. Number of iterations set from GUI
     """
+    abort_counts()
     def loop_optim():
         # Do the loop the desired number of times.
         for i in range(pzt_optim_tree["XY/Iterations"]):
@@ -1804,9 +1805,9 @@ def single_jpe_run():
         # If the desired position is outside range, we just use the starting
         # position.
         try:
-            set_jpe_xy(optim,fpga.get_jpe_pzs()[1])
+            set_jpe_xy(optim,fpga.get_jpe_pzs()[1],write=True)
         except FPGAValueError:
-            set_jpe_xy(*position_register['temp_jpe_position'][:2])
+            set_jpe_xy(*position_register['temp_jpe_position'][:2], write=True)
         # Plot the fit on the optimization plot
         new_axis = np.linspace(np.min(positions),np.max(positions),1000)
         fit_data = fit_x.eval(fit_x.params,x=new_axis)
@@ -1860,9 +1861,9 @@ def single_jpe_run():
         vals = fit_y.best_values
         optim = vals['center']
         try:
-            set_jpe_xy(fpga.get_jpe_pzs()[0],optim)
+            set_jpe_xy(fpga.get_jpe_pzs()[0],optim, write=True)
         except FPGAValueError:
-            set_jpe_xy(*position_register['temp_jpe_position'][:2])
+            set_jpe_xy(*position_register['temp_jpe_position'][:2], write=True)
         # Plot the fit.
         new_axis = np.linspace(np.min(positions),np.max(positions),1000)
         fit_data = fit_y.eval(fit_y.params,x=new_axis)
@@ -1949,9 +1950,9 @@ def optimize_cav_fine(count=0):
         # If the desired position is outside range, we just use the starting
         # position.
         try:
-            set_cav_pos(optim)
+            set_cav_pos(optim,write=True)
         except FPGAValueError:
-            set_cav_pos(position_register['temp_cav_position'])
+            set_cav_pos(position_register['temp_cav_position'],write=True)
         except TimeoutError:
             set_cav_pos(optim,write=False)
         # Plot the fit.
@@ -1973,7 +1974,7 @@ def optimize_cav_coarse():
                           [pzt_optim_tree["Cav/Scan Points"]],
                           output_dtype=float,
                           labels=["Cav"])
-
+    abort_counts()
     optim_data = {}
     # Setup the functions for the scanners.
     def init_cav():
@@ -2025,9 +2026,9 @@ def optimize_cav_coarse():
         # If the desired position is outside range, we just use the starting
         # position.
         try:
-            set_cav_pos(optim)
+            set_cav_pos(optim,write=True)
         except FPGAValueError:
-            set_cav_pos(position_register['temp_cav_position'])
+            set_cav_pos(position_register['temp_cav_position'],write=True)
         except TimeoutError:
             set_cav_pos(optim,write=False)
         optimize_cav_fine_loop()
@@ -2480,7 +2481,7 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
         #################
         # Optimizer Tab #
         #################
-        pzt_optim_controls = ["pzt_optimize"]
+        pzt_optim_controls = ["pzt_optimize", "optim_pzt_xy", "optim_pzt_cav"]
         pzt_optim_params = ["pzt_optim_tree_XY/Count Time (ms)",
                             "pzt_optim_tree_XY/Wait Time (ms)",
                             "pzt_optim_tree_XY/Scan Points",
@@ -2514,7 +2515,7 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                                    tooltip="How long the fpga waits before counting after moving.")
                     pzt_optim_tree.add("Cav/Scan Points", 300,item_kwargs={'min_value':2,'min_clamped':True},
                                    tooltip="Number of points to scan along each axis.")
-                    pzt_optim_tree.add("Cav/Wide Scan Range", 16,item_kwargs={'min_value':0.0,'min_clamped':True,'step':0},
+                    pzt_optim_tree.add("Cav/Wide Scan Range", 16.0,item_kwargs={'min_value':0.0,'min_clamped':True,'step':0},
                                    tooltip="Size of scan along each axis in volts.")
                     pzt_optim_tree.add("Cav/Narrow Scan Range", 0.1,item_kwargs={'min_value':0.0,'min_clamped':True,'step':0},
                                    tooltip="Size of scan along each axis in volts.")
