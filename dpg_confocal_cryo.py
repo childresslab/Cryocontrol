@@ -495,10 +495,15 @@ def save_counts(*args):
     path = Path(dpg.get_value("save_dir"))
     filename = dpg.get_value("save_counts_file")
     path /= filename
-    with path.open('w') as f:
-        f.write("Timestamp,Counts,AI1\n")
-        for d in zip(counts_data['time'],counts_data['counts'],counts_data['AI1']):
-                f.write(f"{d[0]},{d[1]},{d[2]}\n")
+    if '.npz' in filename:
+        np.savez(path,time=counts_data['time'],
+                      counts=counts_data['counts'],
+                      AI1=counts_data['AI1'])
+    else:
+        with path.open('w') as f:
+            f.write("Timestamp,Counts,AI1\n")
+            for d in zip(counts_data['time'],counts_data['counts'],counts_data['AI1']):
+                    f.write(f"{d[0]},{d[1]},{d[2]}\n")
 
 ###################
 # Galvo Optimizer #
