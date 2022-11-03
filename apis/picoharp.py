@@ -2,6 +2,10 @@ import ctypes as ct
 from multiprocessing.sharedctypes import Value
 import numpy as np
 import logging as log
+from pathlib import Path
+
+from numpy.typing import NDArray
+from typing import Union
 log.basicConfig(format='%(levelname)s:%(message)s ', level=log.DEBUG)
 
 MAXDEVNUM = 8
@@ -30,37 +34,50 @@ class PicoDeviceError(Exception):
  
 default_config = {"binning" : 0,
                   "sync_offset" : 23000,
-                  "acq_time" : 1000,
-                  "sync_divider" : 8,
+                  "acq_time" : 3600,
+                  "sync_divider" : 4,
                   "cfd_zero_cross" : [10,10],
                   "cfd_level" : [190,120],
                   "stop" : False,
                   "stop_count" : 1000,
+                  "mode" : 0
                   }
+
 class PicoHarp():
     def __init__(self,config = {}):
-        self._dll = ct.dll.LoadLibrary('phlib64') 
+        self._dll = ct.cdll.LoadLibrary('./phlib64.dll') 
         self._init_dll_functions()
 
         self.times     = np.zeros(HISTCHAN,dtype = np.float)
         self.histogram = np.zeros(HISTCHAN,dtype = np.uint)
         self.last_hist = np.zeros(HISTCHAN,dtype = np.uint)
+        self.last_times = np.zeros(HISTCHAN,dtype = np.float)
+        self.elaps = 0
+        self.last_elaps = 0
+        
+        default_config.update(config)
+        self.default_config = default_config
+        self.mode = default_config['mode']
 
-        config = default_config.update(config)
-        self.binning = config['binning']
-        self.sync_offset = config['sync_offset']
-        self.sync_div = config['sync_divider']
-        self.zero_crossing = config['cfd_zero_cross']
-        self.cfd_level = config['cfd_level']
-        self.stop = config['stop']
-        self.stop_count = config['stop_count']
-        self.acq_time = config['acq_time']
+        self._binning = self.default_config['binning']
+        self._sync_offset = self.default_config['sync_offset']
+        self._sync_div = self.default_config['sync_divider']
+        self._zero_crossing = self.default_config['cfd_zero_cross']
+        self._cfd_level = self.default_config['cfd_level']
+        self._stop = self.default_config['stop']
+        self._stop_count = self.default_config['stop_count']
+        self._acq_time = self.default_config['acq_time']
 
     def _init_dll_functions(self):
+        """
+        In a sense this function doesn't do anything. But it tells
+        ctypes what we expect all the types to be, which can makes things work a bit nicer.
+        This function essentially acts like a header file.
+        """
         cint = ct.c_int
-        cintp = ct.pointer(ct.c_int)
+        cintp = ct.POINTER(ct.c_int)
         cuintp = np.ctypeslib.ndpointer(dtype=np.uint,ndim=1,flags="C_CONTIGUOUS")
-        cdoublep = ct.pinter(ct.c_double)
+        cdoublep = ct.POINTER(ct.c_double)
         charp = ct.c_char_p
 
         # Unless specified return value is int, 
@@ -160,32 +177,98 @@ class PicoHarp():
         self._dll.PH_GetElapsedMeasTime.argtypes = [cint,cdoublep]
         self._dll.PH_GetElapsedMeasTime.restype = cint
 
-    def open_device(self,devidx=0):
-        serial = ct.c_char_p(8)
-        rc = self._dll.PH_OpenDevice(devidx,serial)
+    def open_device(self,devidx:int=0) -> str:
+        """Attemps to open a device with id number given by `devidx`
+
+        Parameters
+        ----------
+        devidx : int, optional
+            The device ID to attempt to open, by default 0
+
+        Returns
+        -------
+        str
+            The serial number associated with the opened device.
+
+        Raises
+        ------
+        PicoDeviceError
+            Raised with an associated message if there's an error opening the given device.
+        PicoDeviceNotFoundError
+            Raised if no device is found associated with the given id.
+        """
+        serial = ct.create_string_buffer(b"",8)
+        rc = self._dll.PH_OpenDevice(ct.c_int(devidx),serial)
         if rc == 0:
-            return str(serial.value)
+            return str(serial.value.decode("utf-8"))
         if rc == ERROR_DEVICE_OPEN_FAIL:
             raise PicoDeviceError(self.get_error_string(rc))
         else:
-            raise PicoDeviceNotFoundError()
+            raise PicoDeviceNotFoundError(self.get_error_string(rc))
 
     def close_device(self):
+        """Closes a previously opened device.
+
+        Raises
+        ------
+        PicoDeviceError
+            Raised with an associated message if the device can't be closed.
+        """
         rc = self._dll.PH_CloseDevice(self.devidx)
         if rc != 0:
             raise PicoDeviceError(self.get_error_string(rc))
     
     def initialize(self):
+        """Initializes the picoharp device. This will put it in the desired mode.
+
+        Raises
+        ------
+        PicoDeviceError
+            Raised with an associated message if device can't be initialized. 
+            See picoharp manual for additional details.
+            If your picoharp does not have the correct firmware license, an error
+            will be raised here and this software will not work. 
+        """
         rc = self._dll.PH_Initialize(self.devidx,self.mode)
         if rc != 0:
             raise PicoDeviceError(self.get_error_string(rc))
 
     def calibrate(self):
+        """Calls the picoharp internal calibration function. Should be run
+        whenever the device hasn't been used for a while or if it underwent a
+        significant change in temperature.
+
+        Raises
+        ------
+        PicoDeviceError
+            Raised with an associated message if any error occurs.
+        """
         rc = self._dll.PH_Calibrate(self.devidx)
         if rc != 0:
             raise PicoDeviceError(self.get_error_string(rc))
 
     def set_input_CFD(self,channel:int,level:int,zero_cross:int):
+        """Set the level and zero-crossing of one of the discriminator channels.
+        See picoharp manual for additional information.
+
+        Parameters
+        ----------
+        channel : int
+            CFD channel to set
+        level : int
+            The voltage crossing level in mV. Value must be positive but represents
+            a negative voltage.
+        zero_cross : int
+            The zero crossing level in mV.
+
+        Raises
+        ------
+        ValueError
+            If any given value is out of bounds for the device. See constants
+            in code.
+        PicoDeviceError
+            Raised with an associated message if any error occurs.
+        """
         if channel not in [0,1]:
             raise ValueError(f"Channel {channel} must be either 0 or 1.")
         if (level < DISCRMIN or level > DISCRMAX):
@@ -197,6 +280,22 @@ class PicoHarp():
             raise PicoDeviceError(self.get_error_string(rc))
 
     def set_sync_div(self,div:int):
+        """Set the sync divider for channel one. Input rate must always be below
+        10 MHz when divided by this value. This value is then taken into
+        account when reading out the countrate.
+
+        Parameters
+        ----------
+        div : int
+            Divider amount, must be one of [1,2,4,8]
+
+        Raises
+        ------
+        ValueError
+            Raised if the given value is not an acceptable value.
+        PicoDeviceError
+            Raised with an associated message if any error occurs.
+        """
         if div not in [1,2,4,8]:
             raise ValueError(f"Rate divider must be one of [1,2,4,8].")
         rc = self._dll.PH_SetSyncDiv(self.devidx, div)
@@ -204,13 +303,46 @@ class PicoHarp():
             raise PicoDeviceError(self.get_error_string(rc))
 
     def set_sync_offset(self,offset:int):
+        """Set the offset time for the sync channel, allowing for tuning
+        of the zero point, in ps. Easier than using a cable of the right length.
+
+        Parameters
+        ----------
+        offset : int
+            Offset in ps, anyhere between +/- 10 ns.
+        Raises
+        ------
+        ValueError
+            Raised if given offset is outside range.
+        PicoDeviceError
+            Raised with an associated message if any error occurs.
+
+        """
         if (offset < SYNCOFFSMIN or offset > SYNCOFFSMAX):
             raise ValueError(f"Sync offset {offset} outside range [{SYNCOFFSMIN}, {SYNCOFFSMAX}].")
-        rc = self._dll.PH_SetSyncDiv(self.devidx, offset)
+        rc = self._dll.PH_SetSyncOffset(self.devidx, offset)
         if rc != 0:
             raise PicoDeviceError(self.get_error_string(rc))
 
     def set_stop_overflow(self,stop:bool,stop_count:int):
+        """Setup overflow value and whether to stop when this is encountered.
+        For example, if set to True and 100, the device will stop acquiring once
+        any bin goes over a count of 100.
+
+        Parameters
+        ----------
+        stop : bool
+            Wether to stop when an overflow is encountered.
+        stop_count : int
+            The value at which to overflow.
+
+        Raises
+        ------
+        ValueError
+            Raised if the stop_count is outside the acceptable range.
+        PicoDeviceError
+            Raised with an associated message if any error occurs.
+        """
         stop = int(stop)
         if (stop_count < 0 or stop_count > 65535):
             raise ValueError(f"Stop count {stop_count} outside range [0,65535].")
@@ -219,7 +351,8 @@ class PicoHarp():
             raise PicoDeviceError(self.get_error_string(rc))
 
     def set_binning(self,binning:int):
-        """
+        """Set the binning of the histogram data according to the following chart:
+
             The binning code corresponds to a power of 2, i.e.:
             0 =   1x base resolution,     => 4*2^0 =    4ps
             1 =   2x base resolution,     => 4*2^1 =    8ps
@@ -229,6 +362,19 @@ class PicoHarp():
             5 =  32x base resolution,     => 4*2^5 =  128ps
             6 =  64x base resolution,     => 4*2^6 =  256ps
             7 = 128x base resolution,     => 4*2^7 =  512ps
+
+        Parameters
+        ----------
+        binning : int
+            The power of two by which the time axis will be binned.
+            i.e. resolution = 4ps * 2^<binning>
+
+        Raises
+        ------
+        ValueError
+            Raised if the binning exponent is outside the acceptable range.
+        PicoDeviceError
+            Raised with an associated message if any error occurs.
         """
         if (binning < 0 or binning > MAXBINSTEPS-1):
             raise ValueError(f"Binning {binning} outside range [0,{MAXBINSTEPS-1}].")
@@ -237,11 +383,42 @@ class PicoHarp():
             raise PicoDeviceError(self.get_error_string(rc))
 
     def clear_hist_mem(self,block:int=0):
+        """Clear the histogram memory of the device. 
+        Will not touch `self.histogram`, 'self.last_hist` or their associated time data.
+
+        Parameters
+        ----------
+        block : int, optional
+            Which memory block to clear, by default 0
+
+        Raises
+        ------
+        PicoDeviceError
+            Raised with an associated message if any error occurs.
+        """
         rc = self._dll.PH_ClearHistMem(self.devidx, block)
         if rc != 0:
             raise PicoDeviceError(self.get_error_string(rc))
 
-    def start_meas(self,tacq:int):
+    def start_meas(self,tacq:int=0):
+        """Start the measurement.
+
+        Parameters
+        ----------
+        tacq : int, optional
+            The amount of time to acquire for in ms.
+            If the overflow stop is enabled, may not count for the full time.
+            By default, will acquire for the time given by `self.acq_time`.
+
+        Raises
+        ------
+        ValueError
+            Raised if the acquisition time is outside the correct range.
+        PicoDeviceError
+            Raised with an associated message if any error occurs.
+        """
+        if tacq == 0:
+            tacq = self.acq_time * 1000
         if (tacq < ACQTMIN or tacq > ACQTMAX):
             raise ValueError(f"Count time {tacq} ms outside range [{ACQTMIN}, {ACQTMAX}].")
         rc = self._dll.PH_StartMeas(self.devidx, tacq)
@@ -249,77 +426,208 @@ class PicoHarp():
             raise PicoDeviceError(self.get_error_string(rc))
 
     def stop_meas(self):
+        """Stop the measurment regardless of status.
+        Note that this should also be called at the end of acquisition even when the device
+        stops by itself, for internal tracking or something. See picoharp manual...
+
+        Raises
+        ------
+        PicoDeviceError
+            Raised with an associated message if any error occurs.
+        """
         rc = self._dll.PH_StopMeas(self.devidx)
         if rc != 0:
             raise PicoDeviceError(self.get_error_string(rc))
 
     def ctc_status(self) -> bool:
+        """Returns True if the device is done counting, else False.
+
+        Returns
+        -------
+        bool
+            The counting status of the device. False if done counting.
+
+        Raises
+        ------
+        PicoDeviceError
+            Raised with an associated message if any error occurs.
+        """
         status = ct.c_int()
         rc = self._dll.PH_CTCStatus(self.devidx, ct.pointer(status))
         if rc != 0:
             raise PicoDeviceError(self.get_error_string(rc))
         # convert int to a bool
         # False means running, True means done
-        return bool(status)
+        return bool(status.value)
 
-    def get_histogram(self,block:int=0) -> np.NDArray[np.uint]:
+    def get_histogram(self,block:int=0) -> NDArray[np.uint]:
+        """Gets the current histogram data from the device,
+        this can be performed while the measurement is being taken.
+        Additionally, calling this function saves the counting data internally.
+        Parameters
+        ----------
+        block : int, optional
+            The memory block from which the data should be read, by default 0
+
+        Returns
+        -------
+        npt.NDArray[np.uint]
+            Array of count data.
+
+        Raises
+        ------
+        PicoDeviceError
+            Raised with an associated message if any error occurs.
+        """
         hist = np.zeros(HISTCHAN,dtype=np.uint)
         rc = self._dll.PH_GetHistogram(self.devidx,hist,block)
         if rc != 0:
             raise PicoDeviceError(self.get_error_string(rc))
         self.last_hist = self.histogram
         self.last_times = self.times
+        self.last_elaps = self.elaps
+
         self.histogram = hist
-        self.times = self.get_resolution * np.array(range(HISTCHAN))
+        self.elaps = self.get_elapsed_meas_time()
+        self.times = self.get_resolution() * np.array(range(HISTCHAN))
         return hist
 
     def get_resolution(self) -> float:
+        """Computes and returns the timing resolution of the device.
+        See `self.set_binning` docs for details.
+
+        Returns
+        -------
+        float
+            The device resolution in ps
+
+        Raises
+        ------
+        PicoDeviceError
+            Raised with an associated message if any error occurs.
+        """
         res = ct.c_double()
         rc = self._dll.PH_GetResolution(self.devidx, ct.pointer(res))
         if rc != 0:
             raise PicoDeviceError(self.get_error_string(rc))
-        return float(res)
+        return float(res.value)
 
     def get_countrate(self,channel:int=1) -> int:
+        """Get the current countrate on the specified channel. Only updates on
+        the device every 100ms.
+
+        Parameters
+        ----------
+        channel : int, optional
+            Device channel to interrogate, either 0 or 1, by default 1
+
+        Returns
+        -------
+        int
+            The count rate in counts/s on the given channel.
+
+        Raises
+        ------
+        ValueError
+            Raised if an invalid channel number is given.
+        PicoDeviceError
+            Raised with an associated message if any error occurs.
+        """
         if channel not in [0,1]:
             raise ValueError(f"Channel {channel} not 0 or 1.")
         rate = ct.c_int()
         rc = self._dll.PH_GetCountRate(self.devidx, channel, ct.pointer(rate))
         if rc != 0:
             raise PicoDeviceError(self.get_error_string(rc))
-        return int(rate)
+        return int(rate.value)
 
     def get_elapsed_meas_time(self) -> float:
+        """Returns how long the current measurement has run for.
+
+        Returns
+        -------
+        float
+            Elapsed time in seconds.
+
+        Raises
+        ------
+        PicoDeviceError
+            Raised with an associated message if any error occurs.
+        """
         time = ct.c_double()
         rc = self._dll.PH_GetElapsedMeasTime(self.devidx, ct.pointer(time))
         if rc != 0:
             raise PicoDeviceError(self.get_error_string(rc))
-        return float(time)
+        return float(time.value)
 
     def get_error_string(self, error_num:int) -> str:
-        error_msg = ct.c_char_p(80)
-        rc = self._dll.PH_GetErrorString(error_msg,error_num)
+        """Converts a given integer return code to an associated error message.
+
+        Parameters
+        ----------
+        error_num : int
+            The returned error code to be translated.
+
+        Returns
+        -------
+        str
+            The terse error message.
+
+        Raises
+        ------
+        PicoDeviceError
+            Raised with an associated message if any error occurs.
+            In this case, hopefully this won't happen...
+        """
+        error_msg = ct.create_string_buffer(b"",40)
+        rc = self._dll.PH_GetErrorString(error_msg,ct.c_int(error_num))
         if rc != 0:
             raise PicoDeviceError(self.get_error_string(rc))
-        return str(error_msg.value)
+        return str(error_msg.value.decode("utf-8"))
 
     # Okay there's the slog of library functions handled.
     # Now we can get around to some higher level stuff.
-    def initialize(self):
+    def init_device(self) -> None:
+        """Loos through all possible device numbers and tries to open the device.
+        Once it finds one, it saves it's number and serial, and initializes it with the given
+        configuration.
+
+        Raises
+        ------
+        PicoDeviceError
+            Raised with an associated message if any error with a device occurs.
+        """
+        num = 0
         for i in range(MAXDEVNUM):
             try:
                 serial = self.open_device(i)
+                num = i
+                break
             except PicoDeviceNotFoundError:
                 continue
             except PicoDeviceError as e:
                 print(self.get_error_string(i))
                 raise e
-            self.devidx = i
-            self.serial = serial
         else:
             log.error("No picoharp device found!")
 
-    def deinitialize(self):
+        self.devidx = num
+        self.serial = serial
+        self.initialize()
+
+        self.binning = self.default_config['binning']
+        self.sync_offset = self.default_config['sync_offset']
+        self.sync_div = self.default_config['sync_divider']
+        self.zero_crossing = self.default_config['cfd_zero_cross']
+        self.cfd_level = self.default_config['cfd_level']
+        self.stop = self.default_config['stop']
+        self.stop_count = self.default_config['stop_count']
+        self.acq_time = self.default_config['acq_time']
+
+    def deinitialize(self) -> None:
+        """Gracefully stops and closes down the connected device.
+        This should always be called before quitting.
+        """
         self.stop_meas()
         self.clear_hist_mem()
         self.close_device()
@@ -402,3 +710,66 @@ class PicoHarp():
         if (val < ACQTMIN or val > ACQTMAX):
             raise ValueError(f"Count time {val} ms outside range [{ACQTMIN}, {ACQTMAX}].")
         self._acq_time = val
+    
+    def save(self,filename:Union[str,Path]="picoharp.npz",old:bool=False) -> None:
+        if old:
+            x = self.last_times
+            y = self.last_hist
+            e = self.last_elaps
+        else:
+            x = self.times
+            y = self.histogram
+            e = self.elaps
+
+        path = Path(filename)
+        path = _safe_file_name(path)
+        ext = str(path.suffix).lower()
+        if ext == ".dat":
+            _save_dat(path,x,y,e)
+        elif ext == ".npz":
+            _save_npz(path,x,y,e)
+        elif ext == ".csv":
+            _save_csv(path,x,y,e)
+
+def _safe_file_name(filename : Path):
+    """Check the file path for a file with the same name, if one is found
+       append a number to the given filename to avoid conflicts.
+
+
+    Parameters
+    ----------
+    filename : Path
+        A path object pointing to a file.
+
+    Returns
+    -------
+    Path
+        The same filename with a number added if needed.
+    """
+    suffix = ""
+    if filename.is_file():
+        folder = filename.parent
+        inc = len(list(folder.glob(f"{filename.stem}*{filename.suffix}")))
+        return folder / f"{filename.stem}{inc}{filename.suffix}"
+    else:
+        return filename
+
+def _save_dat(path:Path,x,y,e):
+    with path.open('w') as f:
+        f.write(f"#PicoHarp 300  Histogram Data - Elapsed Time: {e}\n")
+        f.write("#channels per curve\n")
+        f.write(f"{HISTCHAN}\n")
+        f.write("#display curve no.\n")
+        f.write(f"0\n")
+        f.write("#memory block no.\n")
+        f.write(f"0\n")
+        f.write("#ns/channel\n")
+        f.write(f"{np.mean(np.diff(x))/1000}\n")
+        for c in y:
+            f.write(f"{c}\n")
+
+def _save_npz(path:Path,x,y,e):
+    np.savez(path,times=x,counts=y,elapsed=[e])
+
+def _save_csv(path:Path,x,y,e):
+    np.savetxt(path,(x,y),header=f"#Elapsed Time {e}")
