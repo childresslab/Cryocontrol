@@ -772,4 +772,4 @@ def _save_npz(path:Path,x,y,e):
     np.savez(path,times=x,counts=y,elapsed=[e])
 
 def _save_csv(path:Path,x,y,e):
-    np.savetxt(path,(x,y),header=f"#Elapsed Time {e}")
+    np.savetxt(path,(x,y),fmt='%d',delimiter=',',header=f"#Elapsed Time {e}")
