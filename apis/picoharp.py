@@ -44,17 +44,41 @@ default_config = {"binning" : 0,
                   }
 
 class PicoHarp():
-    def __init__(self,config = {}):
-        self._dll = ct.cdll.LoadLibrary('./phlib64.dll') 
+    def __init__(self,config = {}) -> None:
+        """Initialize the picoharp class. This prepares everything we need
+        but doesn't actually connect to an instrument yet.
+        Loads up the phlib dll, initializes some storage variables and then
+        loads up the config we provide. Config should follow the following
+        format:
+        default_config = {"binning" : 0,
+                          "sync_offset" : 23000,
+                          "acq_time" : 3600,
+                          "sync_divider" : 4,
+                          "cfd_zero_cross" : [10,10],
+                          "cfd_level" : [190,120],
+                          "stop" : False,
+                          "stop_count" : 1000,
+                          "mode" : 0
+                         }
+
+
+        Parameters
+        ----------
+        config : dict, optional
+            Configuration dictionary for the picoharp, see above for defaults.
+            Addiitonal context can be found in the picoharp manual.
+        """
+        self._dll = ct.cdll.LoadLibrary('phlib64.dll') 
         self._init_dll_functions()
 
-        self.times     = np.zeros(HISTCHAN,dtype = np.float)
+        self.times     = np.zeros(HISTCHAN+1,dtype = np.float)
         self.histogram = np.zeros(HISTCHAN,dtype = np.uint)
         self.last_hist = np.zeros(HISTCHAN,dtype = np.uint)
         self.last_times = np.zeros(HISTCHAN,dtype = np.float)
         self.elaps = 0
         self.last_elaps = 0
-        
+        self.devidx = None
+        # Override defaults with given configuration.
         default_config.update(config)
         self.default_config = default_config
         self.mode = default_config['mode']
@@ -483,13 +507,14 @@ class PicoHarp():
         rc = self._dll.PH_GetHistogram(self.devidx,hist,block)
         if rc != 0:
             raise PicoDeviceError(self.get_error_string(rc))
+        hist = hist.astype(int)
         self.last_hist = self.histogram
         self.last_times = self.times
         self.last_elaps = self.elaps
 
         self.histogram = hist
-        self.elaps = self.get_elapsed_meas_time()
-        self.times = self.get_resolution() * np.array(range(HISTCHAN))
+        self.elaps = self.get_elapsed_meas_time() / 1000 # Convert to seconds
+        self.times = self.get_resolution() * (np.arange(HISTCHAN) + 0.5)
         return hist
 
     def get_resolution(self) -> float:
@@ -711,15 +736,10 @@ class PicoHarp():
             raise ValueError(f"Count time {val} ms outside range [{ACQTMIN}, {ACQTMAX}].")
         self._acq_time = val
     
-    def save(self,filename:Union[str,Path]="picoharp.npz",old:bool=False) -> None:
-        if old:
-            x = self.last_times
-            y = self.last_hist
-            e = self.last_elaps
-        else:
-            x = self.times
-            y = self.histogram
-            e = self.elaps
+    def save(self,filename:Union[str,Path]="picoharp.npz") -> None:
+        x = self.times
+        y = self.histogram
+        e = self.elaps
 
         path = Path(filename)
         path = _safe_file_name(path)
@@ -765,6 +785,7 @@ def _save_dat(path:Path,x,y,e):
         f.write(f"0\n")
         f.write("#ns/channel\n")
         f.write(f"{np.mean(np.diff(x))/1000}\n")
+        f.write("#counts\n")
         for c in y:
             f.write(f"{c}\n")
 
@@ -772,4 +793,4 @@ def _save_npz(path:Path,x,y,e):
     np.savez(path,times=x,counts=y,elapsed=[e])
 
 def _save_csv(path:Path,x,y,e):
-    np.savetxt(path,(x,y),fmt='%d',delimiter=',',header=f"#Elapsed Time {e}")
+    np.savetxt(path,np.vstack([x,y]).T,fmt='%d',delimiter=',',header=f"Elapsed Time {e}\ntime,count")
