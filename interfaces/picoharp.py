@@ -54,7 +54,7 @@ class PicoHarpInterface(Interface):
                 dpg.add_button(tag="clear_pico_rate", label="Clear Rate", callback=self.clear_rates)
 
         with dpg.group(horizontal=True, width=0):
-            with dpg.child_window(width=400,autosize_x=False,autosize_y=True,tag="galvo_tree"):
+            with dpg.child_window(width=400,autosize_x=False,autosize_y=True,tag="pico_tree"):
                 self.tree = rdpg.TreeDict(f"{self.treefix}",f'cryo_gui_settings/{self.treefix}_save.csv')
                 self.tree.add("Picoharp/Initialized",False,save=False,callback=self.toggle_init)
                 self.tree.add("Picoharp/Update Rate", 1)
@@ -103,8 +103,8 @@ class PicoHarpInterface(Interface):
                 self.tree.add("Plot/Max Points", 1000, callback=self.set_rate_plot)
 
             with dpg.group():
-                with dpg.child_window(width=-0,height=520):
-                    with dpg.plot(label="Count Histogram",width=-1,height=500,tag="pico_hist_plot"):
+                with dpg.child_window(width=-0,height=470):
+                    with dpg.plot(label="Count Histogram",width=-1,height=450,tag="pico_hist_plot"):
                         dpg.bind_font("plot_font")
                         # REQUIRED: create x and y axes
                         dpg.add_plot_axis(dpg.mvXAxis, label="x", tag="hist_x")
@@ -123,8 +123,8 @@ class PicoHarpInterface(Interface):
                         dpg.bind_item_theme("fit_series","plot_theme_green")
                         dpg.add_plot_legend(location=dpg.mvPlot_Location_NorthEast)
 
-                with dpg.child_window(width=-0,height=320):
-                    with dpg.plot(label="Count Rate",width=-1,height=300,tag="pico_count_plot"):
+                with dpg.child_window(width=-0,height=300):
+                    with dpg.plot(label="Count Rate",width=-1,height=280,tag="pico_count_plot"):
                         dpg.bind_font("plot_font") 
                         # REQUIRED: create x and y axes
                         dpg.add_plot_axis(dpg.mvXAxis, label="x", time=True, tag="rate_x")

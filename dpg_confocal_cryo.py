@@ -13,9 +13,11 @@ import logging as log
 from numpy.typing import NDArray
 
 from apis.scanner import Scanner
-from apis.fpga_cryo import CryoFPGA, FPGAValueError
-from apis.objective_control import Objective
+from apis.dummy.fpga_cryo_dummy import DummyCryoFPGA, FPGAValueError
+from apis.dummy.objective_dummy import DummyObjective
+from apis.picoharp import PicoHarp
 from interfaces.hist_plot import mvHistPlot
+from interfaces.picoharp import PicoHarpInterface
 
 import apis.rdpg as rdpg
 from apis.jpe_coord_convert import JPECoord
@@ -47,15 +49,17 @@ dpg = rdpg.dpg
 log.basicConfig(format='%(levelname)s:%(message)s ', level=log.INFO)
 
 # Setup real control
-log.warning("Using Real Controls")
-fpga = CryoFPGA()
-obj = Objective()
+log.warning("Using Fake Controls")
+fpga = DummyCryoFPGA()
+obj = DummyObjective()
+harp = PicoHarp()
 
 # Setup counts data
 counts_data = {'counts':[0],
                'AI1' :[0],
                'time':[datetime.now().timestamp()]}
 position_register = {"temp_galvo_position":fpga.get_galvo()}
+pico = PicoHarpInterface(lambda x: None, harp)
 
 #################
 # Galvo Control #
@@ -2517,6 +2521,9 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                                                     parent='pzt_optim_cav_x',label='fit', tag='pzt_optim_cav_fit')
                                 dpg.add_plot_legend()
 
+        with dpg.tab(label="Picoharp"):
+            pico.makeGUI(dpg.last_item())
+
 ##################
 # Initialization #
 ##################
@@ -2527,6 +2534,7 @@ optim_tree.load()
 obj_tree.load()
 pzt_tree.load()
 pzt_optim_tree.load()
+pico.tree.load()
 # Initialize Values
 galvo_position = fpga.get_galvo()
 cavity_position = fpga.get_cavity()
