@@ -13,8 +13,8 @@ import logging as log
 from numpy.typing import NDArray
 
 from apis.scanner import Scanner
-from apis.dummy.fpga_cryo_dummy import DummyCryoFPGA, FPGAValueError
-from apis.dummy.objective_dummy import DummyObjective
+from apis.fpga_cryo import CryoFPGA, FPGAValueError
+from apis.objective_control import Objective
 from apis.picoharp import PicoHarp
 from interfaces.hist_plot import mvHistPlot
 from interfaces.picoharp import PicoHarpInterface
@@ -49,9 +49,9 @@ dpg = rdpg.dpg
 log.basicConfig(format='%(levelname)s:%(message)s ', level=log.INFO)
 
 # Setup real control
-log.warning("Using Fake Controls")
-fpga = DummyCryoFPGA()
-obj = DummyObjective()
+log.warning("Using Real Controls")
+fpga = CryoFPGA()
+obj = Objective()
 harp = PicoHarp()
 
 # Setup counts data
