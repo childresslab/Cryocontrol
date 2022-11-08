@@ -76,7 +76,7 @@ def strip_zeros(times,counts):
     idx = np.argmax(np.flip(counts>0))+1
     return times[:-idx],counts[:-idx]
 
-def fit_irf(times,counts,plot=False):
+def fit_irf(times,counts,max_fev,plot=False):
     # Dumb Fit
     model = lm.Model(single_gexp)
     max_idx = np.argmax(counts)
@@ -84,7 +84,7 @@ def fit_irf(times,counts,plot=False):
     const_val = np.mean(counts[:1000])
     center_guess = times[max_idx]
     fwhm_guess = (center_guess-times[np.argmin(np.abs(counts-max_val/2))])*2
-    sigma_guess = fwhm_guess/(2*np.sqrt(2*np.log(2)))
+    sigma_guess = max(0.1,fwhm_guess/(2*np.sqrt(2*np.log(2))))
     amp_guess = (max_val-const_val) * sigma_guess * np.sqrt(2*np.pi)
     params = model.make_params(amp = np.abs(amp_guess),
                                center = np.abs(center_guess),
@@ -93,7 +93,7 @@ def fit_irf(times,counts,plot=False):
                                offset = const_val)
     uncert = np.sqrt(counts)
     uncert[np.where(uncert==0)] = 1
-    results = model.fit(counts,params,x=times,weights=1/uncert)
+    results = model.fit(counts,params,x=times,weights=1/uncert,max_nfev=max_fev)
     if plot:
         results.plot(show_init=True,data_kws={'zorder':3},fit_kws={'zorder':5},init_kws={'zorder':4})
         plt.show(block=False)
@@ -107,7 +107,7 @@ def fit_irf(times,counts,plot=False):
                                  args=(cut_times,), kws={'data': cut_counts})
     return cut_times,cut_counts,poisson_fitter
 
-def fit_decay_double(times,counts,lt_guess,irf_fit,plot=False):
+def fit_decay_double(times,counts,lt_guess,irf_fit,max_fev=100,plot=False):
     # Dumb Fit
     model = lm.Model(double_gexp,independent_vars='x')
     params = model.make_params()
@@ -123,7 +123,7 @@ def fit_decay_double(times,counts,lt_guess,irf_fit,plot=False):
     params['lifetime2'].set(value = irf_params['lifetime'],min=0.15,max=30)
     uncert = np.sqrt(counts)
     uncert[np.where(uncert==0)] = 1
-    results = model.fit(counts,params,x=times,weights=1/uncert)
+    results = model.fit(counts,params,x=times,weights=1/uncert,max_nfev=max_fev)
     if plot:
         results.plot(show_init=True,data_kws={'zorder':3},fit_kws={'zorder':5},init_kws={'zorder':4})
         plt.show(block=False)
@@ -137,7 +137,7 @@ def fit_decay_double(times,counts,lt_guess,irf_fit,plot=False):
                                 args=(cut_times,), kws={'data': cut_counts})
     return cut_times,cut_counts,poisson_fitter
 
-def fit_decay_single(times,counts,lt_guess,irf_fit,plot=False):
+def fit_decay_single(times,counts,lt_guess,irf_fit,max_fev=100,plot=False):
     # Dumb Fit
     model = lm.Model(single_gexp,independent_vars='x')
     params = model.make_params()
@@ -151,7 +151,7 @@ def fit_decay_single(times,counts,lt_guess,irf_fit,plot=False):
     params['lifetime'].set(value = lt_guess, min=0.15,max=30)
     uncert = np.sqrt(counts)
     uncert[np.where(uncert==0)] = 1
-    results = model.fit(counts,params,x=times,weights=1/uncert)
+    results = model.fit(counts,params,x=times,weights=1/uncert,max_nfev=max_fev)
     if plot:
         results.plot(show_init=True,data_kws={'zorder':3},fit_kws={'zorder':5},init_kws={'zorder':4})
         plt.show(block=False)
@@ -165,7 +165,7 @@ def fit_decay_single(times,counts,lt_guess,irf_fit,plot=False):
                                 args=(cut_times,), kws={'data': cut_counts})
     return cut_times,cut_counts,poisson_fitter
 
-def fit_data(times,counts,irf_times=None,irf_counts=None,lt_guess=4.0,plot=False,double=True):
+def fit_data(times,counts,irf_times=None,irf_counts=None,lt_guess=4.0,max_fev=100,plot=False,double=True):
     # Get initial Gaussian Guesses
     if irf_counts is None:
         cutlow,cuthigh = split_rise(times,counts)
@@ -173,12 +173,12 @@ def fit_data(times,counts,irf_times=None,irf_counts=None,lt_guess=4.0,plot=False
         irf_counts = counts[cutlow:cuthigh]
     else:
         irf_x = irf_times
-    irf_cut_times,irf_cut_counts,irf_fit = fit_irf(irf_x,irf_counts,plot=plot)
+    irf_cut_times,irf_cut_counts,irf_fit = fit_irf(irf_x,irf_counts,max_fev,plot=plot)
 
     if double:
-        cut_times,cut_counts,decay_fit = fit_decay_double(times,counts,lt_guess,irf_fit,plot=plot)
+        cut_times,cut_counts,decay_fit = fit_decay_double(times,counts,lt_guess,irf_fit,max_fev,plot=plot)
     else:
-        cut_times,cut_counts,decay_fit = fit_decay_single(times,counts,lt_guess,irf_fit,plot=plot)
+        cut_times,cut_counts,decay_fit = fit_decay_single(times,counts,lt_guess,irf_fit,max_fev,plot=plot)
 
     return cut_times,cut_counts,irf_cut_times,irf_cut_counts, decay_fit, irf_fit
 
@@ -309,6 +309,7 @@ if __name__ == "__main__":
     filenames.append(r"X:\DiamondCloud\Cryostat setup\Data\2022-05-30_cooldown_cont\lifetime\lateral b3\-4Vy.dat")
     filenames.append(r"X:\DiamondCloud\Cryostat setup\Data\2022-05-30_cooldown_cont\lifetime\lateral b3\-5Vy.dat")
     """
+    """
     filenames.append(r"X:\DiamondCloud\Cryostat setup\Data\2022-05-30_cooldown_cont\lifetime\b4\peak_synced.dat")
     filenames.append(r"X:\DiamondCloud\Cryostat setup\Data\2022-05-30_cooldown_cont\lifetime\b4\(-0p4,-0p4)_synced.dat")
     filenames.append(r"X:\DiamondCloud\Cryostat setup\Data\2022-05-30_cooldown_cont\lifetime\b4\(-0p8,-0p8)_synced.dat")
@@ -319,7 +320,8 @@ if __name__ == "__main__":
     filenames.append(r"X:\DiamondCloud\Cryostat setup\Data\2022-05-30_cooldown_cont\lifetime\b4\(-2p8,-2p8)_synced.dat")
     filenames.append(r"X:\DiamondCloud\Cryostat setup\Data\2022-05-30_cooldown_cont\lifetime\b4\(-3p2,-3p2)_synced.dat")
     filenames.append(r"X:\DiamondCloud\Cryostat setup\Data\2022-05-30_cooldown_cont\lifetime\b4\(-3p6,-3p6)_synced.dat")
-
+    """
+    filenames.append(r"C:\Users\Rigel\Documents\Git\cryocontrol\lifetime.dat")
     
 
     for filename in filenames:

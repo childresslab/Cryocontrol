@@ -245,10 +245,6 @@ class NiFPGA():
                         #                #
 ################################################################################
     def get_AI_volts(self,chns=None):
-        """ Get the current position of the scanner hardware.
-
-        @return float[n]: current position in (z1,z3,z3).
-        """
         if chns is None:
             chns = list(range(self._n_AI))
         try:
