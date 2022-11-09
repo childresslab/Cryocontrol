@@ -1,5 +1,3 @@
-from multiprocessing.sharedctypes import Value
-from turtle import color, update, window_width
 import numpy as np
 from apis import rdpg
 from threading import Thread
