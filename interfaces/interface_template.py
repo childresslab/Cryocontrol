@@ -10,9 +10,13 @@ class Interface():
         self.controls = []
         self.params = []
         self.parent = None
+        self.gui_exists = False
 
     def makeGUI(self,parent:Union[str,int]) -> None:
         self.parent = parent
+        raise NotImplementedError("This should be overloaded.")
+
+    def initialize(self) -> None:
         raise NotImplementedError("This should be overloaded.")
 
     def set_params(self,state:bool) -> None:

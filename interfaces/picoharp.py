@@ -42,6 +42,11 @@ class PicoHarpInterface(Interface):
                           'chn2_rate' : []}
         
         self.update_thread = None
+    
+    def initialize(self):
+        if not self.gui_exists:
+            raise RuntimeError("GUI must be made before initialization.")
+        self.tree.load()
 
     def makeGUI(self,parent):
         self.parent = parent
@@ -138,6 +143,7 @@ class PicoHarpInterface(Interface):
                         dpg.bind_item_theme("chn1_rate_plot","plot_theme_blue")
                         dpg.bind_item_theme("chn2_rate_plot","plot_theme_blue")
                         dpg.add_plot_legend(location=dpg.mvPlot_Location_NorthEast)
+        self.gui_exists = True
 
     def toggle_init(self, sender, app_data, user_data):
         if app_data:

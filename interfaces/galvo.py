@@ -21,19 +21,32 @@ class GalvoInterface(Interface):
         self.counter = counter
         self.position_register = {}
 
-        self.controls = ["galvo_tree_Galvo/Position",
+        self.controls = [f"{self.treefix}_Galvo/Position",
                          "galvo_scan"]
 
-        self.params = ["galvo_tree_Scan/Centers (V)",
-                       "galvo_tree_Scan/Spans (V)",
-                       "galvo_tree_Scan/Points",
-                       "galvo_tree_Scan/Count Time (ms)",
-                       "galvo_tree_Scan/Wait Time (ms)"]
+        self.params = [f"{self.treefix}_Scan/Centers (V)",
+                       f"{self.treefix}_Scan/Spans (V)",
+                       f"{self.treefix}_Scan/Points",
+                       f"{self.treefix}_Scan/Count Time (ms)",
+                       f"{self.treefix}_Scan/Wait Time (ms)"]
 
         self.plot = mvHistPlot("Galvo Plot",True,None,True,True,1000,0,300,50,'viridis',True,1,1E9,50,50)
         self.plot.cursor_callback = self.galvo_cursor_callback
 
         self.scanner = Scanner(self.galvo_set_count,[0,0],[1,1],[50,50],[],[],float,['y','x'],default_result=-1)
+
+    def initialize(self):
+        if not self.gui_exists:
+            raise RuntimeError("GUI must be made before initialization.")
+        self.tree.load()
+        
+        # Load in previous position
+        galvo_position = self.fpga.get_galvo()
+        self.tree["Galvo/Position"] = galvo_position
+        self.plot.set_cursor(galvo_position)
+        self.guess_galvo_time()
+
+
 
     def set_controls(self,state:bool) -> None:
         if state:
@@ -57,7 +70,7 @@ class GalvoInterface(Interface):
                 dpg.add_button(tag="save_galvo_button", label="Save Scan",callback=self.save_galvo_scanner)
                 dpg.add_checkbox(tag="auto_save_galvo", label="Auto")
         with dpg.group(horizontal=True, width=0):
-            with dpg.child_window(width=400,autosize_x=False,autosize_y=True,tag="galvo_tree"):
+            with dpg.child_window(width=400,autosize_x=False,autosize_y=True,tag=f"{self.treefix}"):
                 self.tree = rdpg.TreeDict(f"{self.treefix}",f'cryo_gui_settings/{self.treefix}_save.csv')
                 self.tree.add("Galvo/Position",[float(f) for f in self.fpga.get_galvo()],
                                 item_kwargs={'min_value':-10,
@@ -126,6 +139,7 @@ class GalvoInterface(Interface):
                         dpg.bind_item_theme("avg_counts_series2","avg_count_theme")
                         dpg.bind_item_theme("AI1_series2","plot_theme_purple")
                         dpg.add_plot_legend()
+        self.gui_exists = True
 
     def set_galvo(self,x:float,y:float,write:bool=True) -> None:
         """

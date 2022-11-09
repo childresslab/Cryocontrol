@@ -34,6 +34,13 @@ class CounterInterface(Interface):
                   "Counts/Show AI1"]
         self.params = [f"{self.treefix}_{param}" for param in params]
 
+    def initialize(self):
+        if not self.gui_exists:
+            raise RuntimeError("GUI must be made before initialization.")
+        self.tree.load()
+        self.toggle_AI(None, self.tree["Counts/Show AI1"], None)
+
+
     def makeGUI(self, parent: Union[str, int]) -> None:
         self.parent = parent
         with dpg.group(parent=parent,horizontal=True):
@@ -41,7 +48,7 @@ class CounterInterface(Interface):
                     dpg.add_input_text(tag="save_counts_file", default_value="counts.npz", width=200)
                     dpg.add_button(tag="save_counts", label="Save Counts",callback=self.save_counts)
         with dpg.group(horizontal=True,width=0):
-            with dpg.child_window(width=400,autosize_x=False,autosize_y=True,tag="count_tree"):
+            with dpg.child_window(width=400,autosize_x=False,autosize_y=True,tag=f"{self.treefix}"):
                 self.tree = rdpg.TreeDict(f'{self.treefix}',f'cryo_gui_settings/{self.treefix}_save.csv')
                 self.tree.add("Counts/Count Time (ms)", 10,
                                item_kwargs={'min_value':1,'min_clamped':True},
@@ -79,6 +86,7 @@ class CounterInterface(Interface):
                     dpg.bind_item_theme("counts_series","plot_theme_blue")
                     dpg.bind_item_theme("avg_counts_series","avg_count_theme")
                     dpg.bind_item_theme("AI1_series","plot_theme_purple")
+        self.gui_exists = True
 
     def get_count(self,time:float) -> float:
         """
