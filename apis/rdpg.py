@@ -4,9 +4,8 @@ from typing import Callable, Union, Any
 from pathlib import Path
 from ast import literal_eval
 
-import logging as log
-log.basicConfig(format='%(levelname)s:%(message)s ', level=log.INFO)
-
+import logging
+log = logging.getLogger(__name__)
 
 class TreeDict():
     def __init__(self, parent:Union[str,int], savename:str) -> None:

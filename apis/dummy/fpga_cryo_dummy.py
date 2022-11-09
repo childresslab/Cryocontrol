@@ -4,6 +4,10 @@ from ..jpe_coord_convert import JPECoord
 import numpy as np
 from time import sleep, time
 
+from logging import getLogger
+log = getLogger(__name__)
+
+
 pg_config = {"dio_chns" : 16,
              "user_dio_chns" : 14,
              "counter_dio_chn" : 0,

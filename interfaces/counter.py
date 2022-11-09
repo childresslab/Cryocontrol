@@ -2,7 +2,6 @@ import numpy as np
 
 from .interface_template import Interface
 
-import logging as log
 from datetime import datetime
 from apis import rdpg
 from typing import Union
@@ -11,6 +10,9 @@ from numpy.typing import NDArray
 from numpy.lib.stride_tricks import sliding_window_view
 from time import sleep
 from pathlib import Path
+
+from logging import getLogger
+log = getLogger(__name__)
 
 dpg = rdpg.dpg
 

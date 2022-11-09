@@ -1,10 +1,9 @@
-from this import d
 import numpy as np
 from logging import getLogger
 from pathlib import Path
 from time import sleep
 from warnings import warn
-_log = getLogger(__name__)
+log = getLogger(__name__)
 
 # Serial commands with clear names
 # There are more, but these should be all we need

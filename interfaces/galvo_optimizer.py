@@ -1,8 +1,11 @@
 from .interface_template import Interface
 from apis.scanner import Scanner
+from apis.fpga_base import FPGAValueError
 from apis import rdpg
 
-import logging as log
+from logging import getLogger
+log = getLogger(__name__)
+
 import numpy as np
 import lmfit as lm
 
@@ -40,16 +43,16 @@ class GalvoOptInterface(Interface):
     def makeGUI(self,parent):
         with dpg.group(horizontal=True,width=0, parent=parent):
             with dpg.child_window(width=400,autosize_x=False,autosize_y=True,tag=f"{self.treefix}"):
-                optim_tree = rdpg.TreeDict('optim_tree','cryo_gui_settings/optim_tree_save.csv')
-                optim_tree.add("Optimizer/Count Time (ms)", 10.0,item_kwargs={'min_value':1.0,'min_clamped':True,'step':1},
+                self.tree = rdpg.TreeDict(self.treefix,f'cryo_gui_settings/{self.treefix}_save.csv')
+                self.tree.add("Optimizer/Count Time (ms)", 10.0,item_kwargs={'min_value':1.0,'min_clamped':True,'step':1},
                             tooltip="How long the fpga counts at each position.")
-                optim_tree.add("Optimizer/Wait Time (ms)", 10.0,item_kwargs={'min_value':1.0,'min_clamped':True,'step':1},
+                self.tree.add("Optimizer/Wait Time (ms)", 10.0,item_kwargs={'min_value':1.0,'min_clamped':True,'step':1},
                             tooltip="How long the fpga waits before counting after moving.")
-                optim_tree.add("Optimizer/Scan Points", 50,item_kwargs={'min_value':2,'min_clamped':True},
+                self.tree.add("Optimizer/Scan Points", 50,item_kwargs={'min_value':2,'min_clamped':True},
                             tooltip="Number of points to scan along each axis.")
-                optim_tree.add("Optimizer/Scan Range (XY)", 0.1,item_kwargs={'min_value':0.0,'min_clamped':True,'step':0},
+                self.tree.add("Optimizer/Scan Range (XY)", 0.1,item_kwargs={'min_value':0.0,'min_clamped':True,'step':0},
                             tooltip="Size of scan along each axis in volts.")
-                optim_tree.add("Optimizer/Iterations", 1,item_kwargs={'min_value':1,'min_clamped':True},
+                self.tree.add("Optimizer/Iterations", 1,item_kwargs={'min_value':1,'min_clamped':True},
                             tooltip="How many times to rerun the optimization around each new point.")
             with dpg.child_window(width=-1,autosize_y=True): 
                 with dpg.subplots(1,2,label="Optimizer",width=-1,height=-1,tag="optim_plot"):
@@ -73,7 +76,7 @@ class GalvoOptInterface(Interface):
                         dpg.add_line_series([0],[0],
                                             parent='optim_y_y',label='fit', tag='optim_y_fit')
                         dpg.add_plot_legend()
-                        
+
         self.gui_exists = True
 
     def optim_scanner_func(self,axis='x'):
@@ -227,7 +230,7 @@ class GalvoOptInterface(Interface):
             # position.
             try:
                 self.galvo.set_galvo(optim,self.fpga.get_galvo()[1])
-            except self.fpga.FPGAValueError:
+            except FPGAValueError:
                 self.galvo.set_galvo(*self.position_register['temp_galvo_position'])
             # Plot the fit on the optimization plot
             new_axis = np.linspace(np.min(positions),np.max(positions),1000)
@@ -279,7 +282,7 @@ class GalvoOptInterface(Interface):
             optim = max(optim,np.min(positions))
             try:
                 self.galvo.set_galvo(self.fpga.get_galvo()[0],optim)
-            except self.fpga.FPGAValueError:
+            except FPGAValueError:
                 self.galvo.set_galvo(*self.position_register['temp_galvo_position'])
             # Plot the fit.
             new_axis = np.linspace(np.min(positions),np.max(positions),1000)

@@ -1,5 +1,3 @@
-from asyncio.windows_events import proactor_events
-from calendar import c
 import numpy as np
 from time import sleep
 from pathlib import Path

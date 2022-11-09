@@ -1,8 +1,11 @@
 from .interface_template import Interface
 from apis.scanner import Scanner
+from apis.fpga_base import FPGAValueError
 from apis import rdpg
 
-import logging as log
+from logging import getLogger
+log = getLogger(__name__)
+
 import numpy as np
 import lmfit as lm
 
@@ -22,7 +25,7 @@ class PiezoOptInterface(Interface):
 
         self.position_register = {}
 
-        self.controls = ["pzt_optimize"]
+        self.controls = ["optim_pzt_xy", "optim_pzt_cav"]
         self.params = [f"{self.treefix}_XY/Count Time (ms)",
                        f"{self.treefix}_XY/Wait Time (ms)",
                        f"{self.treefix}_XY/Scan Points",
@@ -281,7 +284,7 @@ class PiezoOptInterface(Interface):
             # position.
             try:
                 self.piezo.set_jpe_xy(optim,self.fpga.get_jpe_pzs()[1])
-            except self.fpga.FPGAValueError:
+            except FPGAValueError:
                 self.piezo.set_jpe_xy(*self.position_register['temp_jpe_position'][:2])
             # Plot the fit on the optimization plot
             new_axis = np.linspace(np.min(positions),np.max(positions),1000)
@@ -331,7 +334,7 @@ class PiezoOptInterface(Interface):
             optim = vals['center']
             try:
                 self.piezo.set_jpe_xy(self.fpga.get_jpe_pzs()[0],optim)
-            except self.fpga.FPGAValueError:
+            except FPGAValueError:
                 self.piezo.set_jpe_xy(*self.position_register['temp_jpe_position'][:2])
             # Plot the fit.
             new_axis = np.linspace(np.min(positions),np.max(positions),1000)
@@ -350,7 +353,7 @@ class PiezoOptInterface(Interface):
     def cav_optim_func(self,z):
         try:
             self.piezo.set_cav_pos(z,write=False)
-        except self.fpga.FPGAValueError:
+        except FPGAValueError:
             return 0
         count = self.counter.get_count(self.tree["Cav/Count Time (ms)"])
         return count
@@ -414,7 +417,7 @@ class PiezoOptInterface(Interface):
             # position.
             try:
                 self.piezo.set_cav_pos(optim)
-            except self.fpga.FPGAValueError:
+            except FPGAValueError:
                 self.piezo.set_cav_pos(self.position_register['temp_cav_position'])
             except TimeoutError:
                 self.piezo.set_cav_pos(optim,write=False)
@@ -484,7 +487,7 @@ class PiezoOptInterface(Interface):
             # position.
             try:
                 self.piezo.set_cav_pos(optim)
-            except self.fpga.FPGAValueError:
+            except FPGAValueError:
                 self.piezo.set_cav_pos(self.position_register['temp_cav_position'])
             except TimeoutError:
                 self.piezo.set_cav_pos(optim,write=False)

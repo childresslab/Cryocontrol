@@ -2,15 +2,13 @@ from tkinter.ttk import Progressbar
 import numpy as np
 import lmfit as lm
 from warnings import warn
-import logging as log
 import matplotlib.pyplot as plt
 from matplotlib.offsetbox import AnchoredText
 from scipy.special import erfc
 import corner
-## DEBUG
-#log.basicConfig(format='%(levelname)s:%(message)s ', level=log.DEBUG)
-## WARNING
-log.basicConfig(format='%(levelname)s:%(message)s ', level=log.WARNING)
+
+import logging
+log = logging.getLogger(__name__)
 
 def subarray_idxs(values,threshold=5):
     idxs = [0]

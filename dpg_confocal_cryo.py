@@ -1,5 +1,4 @@
 import dearpygui.dearpygui as dpg
-import logging as log
 
 from apis.dummy.fpga_cryo_dummy import DummyCryoFPGA
 from apis.dummy.objective_dummy import DummyObjective
@@ -22,8 +21,9 @@ dpg = rdpg.dpg
 # Tune step value on plus/minus boxes
 # Documentation
 #TODO TODO TODO TODO TODO
-
-log.basicConfig(format='%(levelname)s:%(message)s ', level=log.DEBUG)
+import logging
+log = logging.getLogger(__name__)
+logging.basicConfig(level=logging.DEBUG)
 
 # Setup control, devices should be defined outside interfaces to allow interuse
 log.warning("Using Dummy Controls")
@@ -176,7 +176,7 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
 # Initialization #
 ##################
 # Initialize all interfaces
-for interface in interfaces.items():
+for interface in interfaces.values():
     interface.initialize()
 
 dpg.set_primary_window('main_window',True)

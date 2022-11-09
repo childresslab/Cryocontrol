@@ -1,4 +1,5 @@
-import logging as log
+from logging import getLogger
+log = getLogger(__name__)
 
 from apis import rdpg
 from typing import Union

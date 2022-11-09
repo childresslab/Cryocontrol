@@ -6,8 +6,12 @@ from apis import rdpg
 from pathlib import Path
 
 import datetime as dt
-import logging as log
+import logging
+log = logging.getLogger(__name__)
 import numpy as np
+
+from logging import getLogger
+log = getLogger(__name__)
 
 dpg = rdpg.dpg
 

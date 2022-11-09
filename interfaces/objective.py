@@ -8,8 +8,12 @@ from threading import Thread
 from typing import Callable
 
 import datetime as dt
-import logging as log
+import logging
+log = logging.getLogger(__name__)
 import numpy as np
+
+from logging import getLogger
+log = getLogger(__name__)
 
 dpg = rdpg.dpg
 
@@ -49,6 +53,8 @@ class ObjectiveInterface(Interface):
             raise RuntimeError("GUI must be made before initialization.")
         self.tree.load()
 
+        self.guess_obj_time()
+
     def makeGUI(self, parent):
         with dpg.group(horizontal=True,parent=parent):
             dpg.add_checkbox(label="Scan Objective",tag="obj_scan", default_value=False, callback=self.start_obj_scan)
@@ -60,7 +66,7 @@ class ObjectiveInterface(Interface):
             dpg.add_button(tag="obj_get_errors",label="Get Obj. Errors",callback=self.get_obj_errors)
         with dpg.group(horizontal=True,width=0,parent=parent):
             with dpg.child_window(width=400,autosize_x=False,autosize_y=True,tag=f"{self.treefix}"):
-                self.tree = rdpg.TreeDict('self.tree','cryo_gui_settings/self.tree_save.csv')
+                self.tree = rdpg.TreeDict(self.treefix,f'cryo_gui_settings/{self.treefix}_save.csv')
                 self.tree.add("Objective/Initialize", False,save=False,callback=self.toggle_objective)
                 self.tree.add("Objective/Status","Uninitialized",save=False,item_kwargs={"readonly":True})
                 self.tree.add("Objective/Set Position (um)", 100.0,callback=self.set_obj_callback,item_kwargs={"on_enter":True,'step':0})
@@ -113,14 +119,14 @@ class ObjectiveInterface(Interface):
                                 dpg.add_plot_axis(dpg.mvXAxis, label="x", time=True, tag="count_x3")
                                 dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="count_y3")
                                 dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="count_AI13",no_gridlines=True)
-                                dpg.add_line_series(rdpg.offset_timezone(self.counter.counts_data['time']),
-                                                    self.counter.counts_data['counts'],
+                                dpg.add_line_series(rdpg.offset_timezone(self.counter.data['time']),
+                                                    self.counter.data['counts'],
                                                     parent='count_y3',label='counts', tag='counts_series3')
-                                dpg.add_line_series(rdpg.offset_timezone(self.counter.counts_data['time']),
-                                                    self.counter.counts_data['counts'],
+                                dpg.add_line_series(rdpg.offset_timezone(self.counter.data['time']),
+                                                    self.counter.data['counts'],
                                                     parent='count_y3',label='avg. counts', tag='avg_counts_series3')
-                                dpg.add_line_series(rdpg.offset_timezone(self.counter.counts_data['time']),
-                                                    self.counter.counts_data['AI1'],
+                                dpg.add_line_series(rdpg.offset_timezone(self.counter.data['time']),
+                                                    self.counter.data['AI1'],
                                                     parent='count_AI13',label='AI1', tag='AI1_series3')
                                 dpg.set_item_source('counts_series3','counts_series')
                                 dpg.set_item_source('avg_counts_series3','avg_counts_series')

@@ -13,8 +13,12 @@ gummy.nsig = 1
 from pathlib import Path
 
 import datetime as dt
-import logging as log
+import logging
+log = logging.getLogger(__name__)
 import numpy as np
+
+from logging import getLogger
+log = getLogger(__name__)
 
 dpg = rdpg.dpg
 
@@ -26,7 +30,14 @@ class PicoHarpInterface(Interface):
         self.treefix = treefix
 
         self.controls = []
-        self.params = []
+        self.params = [f"{self.treefix}_Counting/Time",
+                       f"{self.treefix}_Counting/Stop",
+                       f"{self.treefix}_Counting/Stop At",
+                       f"{self.treefix}_Counting/Divider",
+                       f"{self.treefix}_Counting/Binning",
+                       f"{self.treefix}_Advanced/CFD Zero",
+                       f"{self.treefix}_Advanced/CFD Crossing",
+                       f"{self.treefix}_Advanced/Sync Offset"]
 
         # Hardcoded, probably dumb
         irf_edges,irf_counts = lifetime_fitter.import_pico(r"X:\DiamondCloud\Cryostat setup\Data\2022-04-07_sample_fluro_scans\lifetime\IRF_offset.dat")
@@ -59,7 +70,7 @@ class PicoHarpInterface(Interface):
                 dpg.add_button(tag="clear_pico_rate", label="Clear Rate", callback=self.clear_rates)
 
         with dpg.group(horizontal=True, width=0):
-            with dpg.child_window(width=400,autosize_x=False,autosize_y=True,tag="pico_tree"):
+            with dpg.child_window(width=400,autosize_x=False,autosize_y=True,tag=self.treefix):
                 self.tree = rdpg.TreeDict(f"{self.treefix}",f'cryo_gui_settings/{self.treefix}_save.csv')
                 self.tree.add("Picoharp/Initialized",False,save=False,callback=self.toggle_init)
                 self.tree.add("Picoharp/Update Rate", 1)

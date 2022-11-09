@@ -1,6 +1,7 @@
 from .interface_template import Interface
 from .hist_plot import mvHistPlot
 from apis.scanner import Scanner
+from apis.fpga_base import FPGAValueError
 from apis import rdpg
 
 from pathlib import Path
@@ -8,8 +9,12 @@ from threading import Thread
 from typing import Callable
 
 import datetime as dt
-import logging as log
+import logging
+log = logging.getLogger(__name__)
 import numpy as np
+
+from logging import getLogger
+log = getLogger(__name__)
 
 dpg = rdpg.dpg
 
@@ -72,10 +77,9 @@ class PiezoInterface(Interface):
         self.tree["JPE/Z0 Position"] = jpe_position[2]
         self.tree["JPE/XY Position"] = jpe_position[:2]
         self.tree["JPE/Z Volts"] = self.pz_conv.zs_from_cart(jpe_position)
-        self.toggle_tilt(None,self.pzt_tree["JPE/Tilt/Enable"], None)
+        self.toggle_tilt(None,self.tree["JPE/Tilt/Enable"], None)
 
         self.guess_pzt_times()
-        self.guess_obj_time()
         self.draw_bounds()
         self.plot.set_cursor(jpe_position[:2])
 
@@ -110,7 +114,7 @@ class PiezoInterface(Interface):
                 
         with dpg.group(horizontal=True,width=0,parent=parent):
             with dpg.child_window(width=400,autosize_x=False,autosize_y=True,tag=f"{self.treefix}"):
-                self.tree = rdpg.TreeDict('pzt_tree','cryo_gui_settings/pzt_tree_save.csv')
+                self.tree = rdpg.TreeDict(self.treefix,f'cryo_gui_settings/{self.treefix}_save.csv')
                 self.tree.add("JPE/Z0 Position",0.0,
                                 item_kwargs={'min_value':-6.5,'max_value':0,
                                             'min_clamped':True,'max_clamped':True,
@@ -185,7 +189,7 @@ class PiezoInterface(Interface):
     def set_cav_and_count(self,z):
         try:
             self.set_cav_pos(z,write=False)
-        except self.fpga.FPGAValueError:
+        except FPGAValueError:
             return 0
         count = self.get_count(self.tree["Scan/Count Time (ms)"])
         return count
@@ -193,7 +197,7 @@ class PiezoInterface(Interface):
     def set_xy_and_count(self,y,x):
         try:
             self.set_jpe_xy(x,y,write=False)
-        except self.fpga.FPGAValueError:
+        except FPGAValueError:
             return 0
         count = self.get_count(self.tree["Scan/Count Time (ms)"])
         return count
@@ -261,7 +265,7 @@ class PiezoInterface(Interface):
         try:
             self.set_jpe_xy(x,y,write=False)
             self.do_cav_scan_step().join()
-        except self.fpga.FPGAValueError:
+        except FPGAValueError:
             return np.array([-1])
         return self.jpe_cav_scan.results
 
@@ -313,7 +317,7 @@ class PiezoInterface(Interface):
             dpg.set_value("pzt_xy_scan",False)
             try:
                 self.set_jpe_xy(*self.position_register["temp_jpe_position"][:2])
-            except self.fpga.FPGAValueError:
+            except FPGAValueError:
                 log.warn("Couldn't Reset PZT Position.")
             if dpg.get_value("pzt_auto_save"):
                 self.save_xy_scan()
@@ -359,7 +363,7 @@ class PiezoInterface(Interface):
                 dpg.set_axis_limits("cav_count_x",xmin,xmax)
             else:
                 dpg.set_axis_limits_auto("cav_count_x")
-            dpg.configure_item("self.tree_Plot/3D/Slice Index",max_value=self.tree["Scan/Cavity/Steps"]-1)
+            dpg.configure_item(f"{self.treefix}_Plot/3D/Slice Index",max_value=self.tree["Scan/Cavity/Steps"]-1)
             self.set_interfaces("pzt",False)
         
         def abort(i,imax,idx,pos,res):
@@ -453,7 +457,7 @@ class PiezoInterface(Interface):
             self.plot.set_size(int(self.jpe_3D_scan.steps[0]),int(self.jpe_3D_scan.steps[1]))
             self.plot.set_bounds(xmin,xmax,ymin,ymax)
             dpg.configure_item("Piezo Scan_heat_series",label="3D Scan")
-            dpg.configure_item("self.tree_Plot/3D/Slice Index",max_value=self.tree["Scan/Cavity/Steps"]-1)
+            dpg.configure_item(f"{self.treefix}_Plot/3D/Slice Index",max_value=self.tree["Scan/Cavity/Steps"]-1)
             self.set_interfaces("pzt",False)
         
         def abort(i,imax,idx,pos,res):
@@ -508,7 +512,7 @@ class PiezoInterface(Interface):
             volts = dpg.get_value("cav_count_cut")
             index = np.argmin(np.abs(self.jpe_cav_scan.positions[0]-volts))
             self.tree['Plot/3D/Slice Index'] = int(index)
-        if sender == "self.tree_Plot/3D/Slice Index":
+        if sender == f"{self.treefix}_Plot/3D/Slice Index":
             index = app_data
             volts = self.jpe_cav_scan.positions[0][index]
             dpg.set_value("cav_count_cut",volts)
@@ -548,28 +552,28 @@ class PiezoInterface(Interface):
         try:
             write = not dpg.get_value("count")
             self.set_jpe_xy(app_data[0],app_data[1],write=write)
-        except self.fpga.FPGAValueError:
+        except FPGAValueError:
             pass
 
     def z_pos_callback(self,sender,app_data,user_data):
         try:
             write = not dpg.get_value("count")
             self.set_jpe_z(app_data,write=write)
-        except self.fpga.FPGAValueError:
+        except FPGAValueError:
             pass
 
     def tilt_z_pos_callback(self,sender,app_data,user_data):
         try:
             write = not dpg.get_value("count")
             self.set_jpe_z_tilt(app_data,write=write)
-        except self.fpga.FPGAValueError:
+        except FPGAValueError:
             pass
 
     def tilt_callback(self,sender, app_data, user_data):
         try:
             write = not dpg.get_value("count")
             self.set_jpe_xy(None,None,write=write)
-        except self.fpga.FPGAValueError:
+        except FPGAValueError:
             pass
 
     def get_tilt(self,x,y):
@@ -589,17 +593,17 @@ class PiezoInterface(Interface):
         if app_data:
             try:
                 self.set_jpe_z()
-                dpg.enable_item("self.tree_JPE/Tilt/Z Offset")
-                dpg.enable_item("self.tree_JPE/Set Z Position")
-            except self.fpga.FPGAValueError:
+                dpg.enable_item(f"{self.treefix}_JPE/Tilt/Z Offset")
+                dpg.enable_item(f"{self.treefix}_JPE/Set Z Position")
+            except FPGAValueError:
                 # Changing tilt would put us out of bounds
                 self.tree["JPE/Tilt/Enable"] = False
         else:
             try:
                 self.set_jpe_z()
-                dpg.disable_item("self.tree_JPE/Tilt/Z Offset")
-                dpg.disable_item("self.tree_JPE/Set Z Position")
-            except self.fpga.FPGAValueError:
+                dpg.disable_item(f"{self.treefix}_JPE/Tilt/Z Offset")
+                dpg.disable_item(f"{self.treefix}_JPE/Set Z Position")
+            except FPGAValueError:
                 # Changing tilt would put us out of bounds
                 self.tree["JPE/Tilt/Enable"] = True
 
@@ -621,7 +625,7 @@ class PiezoInterface(Interface):
         in_bounds =self.pz_conv.check_bounds(x,y,compensated_z)
         if not in_bounds:
             self.tree["JPE/XY Position"] = current_pos[:2]
-            raise self.fpga.FPGAValueError("Out of bounds")
+            raise FPGAValueError("Out of bounds")
 
         self.tree["JPE/Set Z Position"] = compensated_z
         self.tree["JPE/Tilt/Z Offset"] = z_delta
@@ -647,7 +651,7 @@ class PiezoInterface(Interface):
         in_bounds = self.pz_conv.check_bounds(x,y,compensated_z)
         if not in_bounds:
             self.tree["JPE/Z0 Position"] = current_pos[2] - z_delta
-            raise self.fpga.FPGAValueError("Out of bounds")
+            raise FPGAValueError("Out of bounds")
 
         self.tree["JPE/Z Volts"] = volts
         self.tree["JPE/Z0 Position"] = z
@@ -671,7 +675,7 @@ class PiezoInterface(Interface):
         in_bounds = self.pz_conv.check_bounds(x,y,z)
         if not in_bounds:
             self.tree["JPE/Set Z Position"] = current_pos[2]
-            raise self.fpga.FPGAValueError("Out of bounds")
+            raise FPGAValueError("Out of bounds")
 
         self.tree["JPE/Z Volts"] = volts
         self.tree["JPE/Z0 Position"] = z0
@@ -702,7 +706,7 @@ class PiezoInterface(Interface):
         write = not dpg.get_value("count")
         try:
             self.set_jpe_xy(position[0],position[1],write=write)
-        except self.fpga.FPGAValueError:
+        except FPGAValueError:
             self.plot.set_cursor(cur_xy)
 
     def save_xy_scan(self,*args):

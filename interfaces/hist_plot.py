@@ -1,9 +1,9 @@
 import numpy as np
 from apis import rdpg
 from threading import Thread
-import logging as log
+import logging
+log = logging.getLogger(__name__)
 dpg = rdpg.dpg
-log.basicConfig(format='%(levelname)s:%(message)s ', level=log.WARNING)
 
 
 colormaps = {'viridis' : dpg.mvPlotColormap_Viridis,
