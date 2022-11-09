@@ -26,6 +26,9 @@ class ObjectiveInterface(Interface):
         self.galvo=galvo
         self.counter = counter
         self.treefix = treefix
+
+        self.position_register = {}
+
         # Intialize Scanner object
         self.obj_scan = Scanner(self.obj_scan_func('x'),[0,0],[1,1],[50,50],[],[],float,['z','x'],default_result=-1)
         # Initialize the objective hist plot, which contains the heatmap and histogram of the data.
@@ -236,7 +239,7 @@ class ObjectiveInterface(Interface):
             self.position_register["temp_galvo_position"] = self.fpga.get_galvo()
             self.obj_plot.set_size(int(self.obj_scan.steps[0]),int(self.obj_scan.steps[1]))
             self.obj_plot.set_bounds(xmin,xmax,ymin,ymax)
-            self.set_interfaces("obj",False)
+            self.set_interfaces("obj",False, "obj_scan")
         
         def abort(i,imax,idx,pos,res):
             return not dpg.get_value("obj_scan")
@@ -255,12 +258,12 @@ class ObjectiveInterface(Interface):
                     self.obj_plot.autoscale = self.tree["Plot/Autoscale"]
                     self.obj_plot.nbin = self.tree["Plot/N Bins"]
                     self.obj_plot.update_plot(plot_data)
-                    if self.counter.counter.tree["Counts/Plot Scan Counts"]:
+                    if self.counter.tree["Counts/Plot Scan Counts"]:
                         self.counter.plot_counts()
 
         def finish(results,completed):
             #Reenable controls first to avoid blocking
-            self.set_interfaces("obj",True)
+            self.set_interfaces("obj",True, "obj_scan")
             dpg.set_value("obj_scan",False)
             self.set_obj_abs(self.position_register["temp_obj_position"])
             self.galvo.set_galvo(*self.position_register["temp_galvo_position"])

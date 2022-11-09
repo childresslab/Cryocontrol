@@ -202,6 +202,7 @@ class mvHistPlot():
     
     def keep_cursor(self,sender,app_data,user_data):
         if sender == f"{self.label}_cc":
+            point = [0,0]
             point[0] = dpg.get_value(f"{self.label}_cx")
             point[1] = dpg.get_value(f"{self.label}_cy")
             dpg.set_value(f"{self.label}_cc",point)

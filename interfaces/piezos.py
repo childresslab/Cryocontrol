@@ -84,17 +84,18 @@ class PiezoInterface(Interface):
         self.plot.set_cursor(jpe_position[:2])
 
 
-
-    def set_controls(self,state:bool) -> None:
+    def set_controls(self,state:bool,ignore:str=None) -> None:
         if state:
             for control in self.controls:
-                log.debug(f"Enabling {control}")
-                dpg.enable_item(control)
+                if control != ignore:
+                    log.debug(f"Enabling {control}")
+                    dpg.enable_item(control)
             self.plot.enable_cursor()
         else:
             for control in self.controls:
-                log.debug(f"Disabling {control}")
-                dpg.disable_item(control)
+                if control != ignore:
+                    log.debug(f"Disabling {control}")
+                    dpg.disable_item(control)
             self.plot.disable_cursor()
 
     def makeGUI(self, parent):
@@ -191,7 +192,7 @@ class PiezoInterface(Interface):
             self.set_cav_pos(z,write=False)
         except FPGAValueError:
             return 0
-        count = self.get_count(self.tree["Scan/Count Time (ms)"])
+        count = self.counter.get_count(self.tree["Scan/Count Time (ms)"])
         return count
 
     def set_xy_and_count(self,y,x):
@@ -199,26 +200,19 @@ class PiezoInterface(Interface):
             self.set_jpe_xy(x,y,write=False)
         except FPGAValueError:
             return 0
-        count = self.get_count(self.tree["Scan/Count Time (ms)"])
+        count = self.counter.get_count(self.tree["Scan/Count Time (ms)"])
         return count
 
     def do_cav_scan_step(self):
         if not dpg.get_value("pzt_3d_scan"):
             return [-1]
 
-        steps = self.tree["Scan/Cavity/Steps"]
-        centers = self.tree["Scan/Cavity/Center"]
-        spans = self.tree["Scan/Cavity/Span"]
-        self.jpe_cav_scan.steps = [steps]
-        self.jpe_cav_scan.centers = [centers]
-        self.jpe_cav_scan.spans = [spans]
-        cav_data = {}
+        cav_data = {'counts': [], 'pos' : []}
 
         def init():
+            self.fpga.set_ao_wait(self.tree["Scan/Cavity/Wait Time (ms)"],write=False)
             log.debug("Starting cav scan sub.")
             pos = self.jpe_cav_scan._get_positions()
-            cav_data['counts'] = []
-            cav_data['pos'] = []
             xmin = np.min(pos[0])
             xmax = np.max(pos[0])
             self.position_register["temp_cav_position"] = self.fpga.get_cavity()
@@ -235,8 +229,6 @@ class PiezoInterface(Interface):
             cav_data['counts'].append(res)
             cav_data['pos'].append(pos[0])
             check = self.tree["Plot/Update Every Point"] or i + 1 >= imax
-            if i == 0:
-                self.fpga.set_ao_wait(self.tree["Scan/Cavity/Wait Time (ms)"],write=False)
             if check:
                 dpg.set_value("cav_counts",[cav_data['pos'],cav_data['counts']])
                 if self.tree['Plot/Autoscale']:
@@ -253,7 +245,6 @@ class PiezoInterface(Interface):
                 dpg.set_axis_limits_auto("cav_count_y")
             self.set_cav_pos(*self.position_register["temp_cav_position"])
             self.fpga.set_ao_wait(self.tree["Scan/JPE/Wait Time (ms)"],write=False)
-            
 
         self.jpe_cav_scan._init_func = init
         self.jpe_cav_scan._abort_func = abort
@@ -263,7 +254,7 @@ class PiezoInterface(Interface):
 
     def set_xy_get_cav(self,y,x):
         try:
-            self.set_jpe_xy(x,y,write=False)
+            self.set_jpe_xy(x,y,write=True)
             self.do_cav_scan_step().join()
         except FPGAValueError:
             return np.array([-1])
@@ -292,7 +283,7 @@ class PiezoInterface(Interface):
             self.plot.set_size(int(self.jpe_xy_scan.steps[0]),int(self.jpe_xy_scan.steps[1]))
             self.plot.set_bounds(xmin,xmax,ymin,ymax)
             dpg.configure_item("Piezo Scan_heat_series",label="2D Scan")
-            self.set_interfaces("pzt",False)
+            self.set_interfaces("pzt",False, "pzt_xy_scan")
         
         def abort(i,imax,idx,pos,res):
             return not dpg.get_value("pzt_xy_scan")
@@ -313,7 +304,7 @@ class PiezoInterface(Interface):
 
         def finish(results,completed):
             #Reenable controls first to avoid blocking
-            self.set_interfaces("pzt",False)
+            self.set_interfaces("pzt",True, "pzt_xy_scan")
             dpg.set_value("pzt_xy_scan",False)
             try:
                 self.set_jpe_xy(*self.position_register["temp_jpe_position"][:2])
@@ -364,7 +355,7 @@ class PiezoInterface(Interface):
             else:
                 dpg.set_axis_limits_auto("cav_count_x")
             dpg.configure_item(f"{self.treefix}_Plot/3D/Slice Index",max_value=self.tree["Scan/Cavity/Steps"]-1)
-            self.set_interfaces("pzt",False)
+            self.set_interfaces("pzt",False, "pzt_cav_scan")
         
         def abort(i,imax,idx,pos,res):
             return not dpg.get_value("pzt_cav_scan")
@@ -381,11 +372,11 @@ class PiezoInterface(Interface):
                 dpg.set_axis_limits_auto("cav_count_y")
                 dpg.fit_axis_data("cav_count_y")
             if self.counter.tree["Counts/Plot Scan Counts"]:
-                self.counterplot_counts()
+                self.counter.plot_counts()
 
         def finish(results,completed):
             #Reenable controls first to avoid blocking.
-            self.set_interfaces("pzt",True)
+            self.set_interfaces("pzt",True, "pzt_cav_scan")
 
             dpg.set_value("pzt_cav_scan",False)
             if self.tree['Plot/Autoscale']:
@@ -445,6 +436,13 @@ class PiezoInterface(Interface):
         self.jpe_3D_scan.centers = jpe_centers
         self.jpe_3D_scan.spans = jpe_spans
 
+        steps = self.tree["Scan/Cavity/Steps"]
+        centers = self.tree["Scan/Cavity/Center"]
+        spans = self.tree["Scan/Cavity/Span"]
+        self.jpe_cav_scan.steps = [steps]
+        self.jpe_cav_scan.centers = [centers]
+        self.jpe_cav_scan.spans = [spans]
+
         def init():
             self.fpga.set_ao_wait(self.tree["Scan/JPE/Wait Time (ms)"],write=False)
             pos = self.jpe_3D_scan._get_positions()
@@ -458,32 +456,33 @@ class PiezoInterface(Interface):
             self.plot.set_bounds(xmin,xmax,ymin,ymax)
             dpg.configure_item("Piezo Scan_heat_series",label="3D Scan")
             dpg.configure_item(f"{self.treefix}_Plot/3D/Slice Index",max_value=self.tree["Scan/Cavity/Steps"]-1)
-            self.set_interfaces("pzt",False)
+            self.set_interfaces("pzt",False, "pzt_3d_scan")
         
         def abort(i,imax,idx,pos,res):
             return not dpg.get_value("pzt_3d_scan")
 
         def prog(i,imax,idx,pos,res):
-                log.debug("Setting Progress Bar")
-                dpg.set_value("pb",(i+1)/imax)
-                dpg.configure_item("pb",overlay=f"JPE 3D Scan {i+1}/{imax}")
-                if self.tree["Plot/Update Every Point"]:
-                    check = True
-                else:
-                    check = (not (i+1) % self.jpe_3D_scan.steps[1]) or (i+1)==imax
-                if check:
-                    log.debug("Updating 3D Scan Plot")
-                    self.update_pzt_plot("manual",None,None)
-                    if self.counter.tree["Counts/Plot Scan Counts"]:
-                        self.counter.plot_counts()
+            log.debug("Setting Progress Bar")
+            dpg.set_value("pb",(i+1)/imax)
+            dpg.configure_item("pb",overlay=f"JPE 3D Scan {i+1}/{imax}")
+            if self.tree["Plot/Update Every Point"]:
+                check = True
+            else:
+                check = (not (i+1) % self.jpe_3D_scan.steps[1]) or (i+1)==imax
+            if check:
+                log.debug("Updating 3D Scan Plot")
+                self.update_pzt_plot("manual",None,None)
+                if self.counter.tree["Counts/Plot Scan Counts"]:
+                    self.counter.plot_counts()
 
         def finish(results,completed):
-            #Reenable contrls first to avoid blocking
-            self.set_interfaces("pzt",True)
+            #Reenable controls first to avoid blocking
+            self.set_interfaces("pzt",True, "pzt_3d_scan")
 
             dpg.set_value("pzt_3d_scan",False)
             self.set_jpe_xy(*self.position_register["temp_jpe_position"][:2])
             self.set_cav_pos(*self.position_register["temp_cav_position"])
+            self.fpga.set_ao_wait(self.counter.tree["Counts/Wait Time (ms)"],write=False)
             if dpg.get_value("pzt_auto_save"):
                 self.save_xy_scan()
 

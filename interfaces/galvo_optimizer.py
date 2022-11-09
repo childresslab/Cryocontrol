@@ -195,7 +195,7 @@ class GalvoOptInterface(Interface):
             dpg.set_value('optim_y_counts',[[0],[0]])
             dpg.set_value('optim_x_fit',[[],[]])
             dpg.set_value('optim_y_fit',[[],[]])
-            self.set_interfaces("galvo_optim",False)
+            self.set_interfaces("galvo_opt",False)
 
         def prog_x(i,imax,idx,pos,res):
             """
@@ -251,7 +251,7 @@ class GalvoOptInterface(Interface):
             """
             optim_data['counts'] = []
             optim_data['pos'] = []
-            self.position_register['temp_galvo_position'] = self.pga.get_galvo()
+            self.position_register['temp_galvo_position'] = self.fpga.get_galvo()
 
         def prog_y(i,imax,idx,pos,res):
             """

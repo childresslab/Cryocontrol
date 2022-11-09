@@ -52,16 +52,18 @@ class GalvoInterface(Interface):
 
 
 
-    def set_controls(self,state:bool) -> None:
+    def set_controls(self,state:bool,ignore:str=None) -> None:
         if state:
             for control in self.controls:
-                log.debug(f"Enabling {control}")
-                dpg.enable_item(control)
+                if control != ignore:
+                    log.debug(f"Enabling {control}")
+                    dpg.enable_item(control)
             self.plot.enable_cursor()
         else:
             for control in self.controls:
-                log.debug(f"Disabling {control}")
-                dpg.disable_item(control)
+                if control != ignore:
+                    log.debug(f"Disabling {control}")
+                    dpg.disable_item(control)
             self.plot.disable_cursor()
 
     def makeGUI(self,parent):
@@ -240,7 +242,7 @@ class GalvoInterface(Interface):
             self.plot.set_bounds(xmin,xmax,ymin,ymax)
             # Store the current position of the galvo for reseting later
             self.position_register["temp_galvo_position"] = self.fpga.get_galvo()
-            self.set_interfaces("galvo",False)
+            self.set_interfaces("galvo",False, "galvo_scan")
         
         def abort(i,imax,idx,pos,res):
             """
@@ -277,7 +279,7 @@ class GalvoInterface(Interface):
             """
             Finish callback for the scanner.
             """
-            self.set_interfaces("galvo",True)
+            self.set_interfaces("galvo",True, "galvo_scan")
             # Uncheck scan button, indicating that we're done
             dpg.set_value("galvo_scan",False)
             # Reset the galvo to it's position at the start of the scan

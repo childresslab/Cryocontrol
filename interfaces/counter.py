@@ -34,6 +34,8 @@ class CounterInterface(Interface):
                   "Counts/Average Points",
                   "Counts/Plot Scan Counts",
                   "Counts/Show AI1"]
+        self.plot_thread = None
+        self.draw_thread = None
         self.params = [f"{self.treefix}_{param}" for param in params]
 
     def initialize(self):
@@ -141,6 +143,11 @@ class CounterInterface(Interface):
 
     # Encapsulated
     def plot_counts(self,*args):
+        if self.plot_thread is None or not self.plot_thread.is_alive():
+            self.plot_thread = Thread(target=self.plot_counts_thread)
+            self.plot_thread.run()
+
+    def plot_counts_thread(self):
         """
         Update the count plots on various pages
         """
@@ -156,9 +163,9 @@ class CounterInterface(Interface):
                 break
         # Average the time and counts data
         avg_time, avg_counts= average_counts(self.data['time'],
-                                            self.data['counts'],
-                                            min(len(self.data['time']),
-                                                self.tree["Counts/Average Points"]))
+                                             self.data['counts'],
+                                             min(len(self.data['time']),
+                                             self.tree["Counts/Average Points"]))
         # Update all the copies of the count plots.
         dpg.set_value('counts_series',[rdpg.offset_timezone(self.data['time']),self.data['counts']])
         dpg.set_value('avg_counts_series',[rdpg.offset_timezone(avg_time),avg_counts])
@@ -166,6 +173,11 @@ class CounterInterface(Interface):
 
     # Encapsulated
     def draw_count(self,val):
+        if self.draw_thread is None or not self.draw_thread.is_alive():
+            self.draw_thread = Thread(target=self.draw_count_thread, args=(val,))
+            self.draw_thread.run()
+
+    def draw_count_thread(self,val):
         """
         Prints the count rate in numbers in the special count rate window.
         Sets the color according to some limits for our equipment.

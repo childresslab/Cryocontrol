@@ -30,12 +30,14 @@ class Interface():
                 log.debug(f"Disabling {param}")
                 dpg.disable_item(param)
 
-    def set_controls(self,state:bool) -> None:
+    def set_controls(self,state:bool,ignore:str=None) -> None:
         if state:
             for control in self.controls:
-                log.debug(f"Enabling {control}")
-                dpg.enable_item(control)
+                if control != ignore:
+                    log.debug(f"Enabling {control}")
+                    dpg.enable_item(control)
         else:
             for control in self.controls:
-                log.debug(f"Disabling {control}")
-                dpg.disable_item(control)
+                if control != ignore:
+                    log.debug(f"Disabling {control}")
+                    dpg.disable_item(control)

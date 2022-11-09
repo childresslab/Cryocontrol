@@ -34,15 +34,16 @@ devices = {'fpga':fpga, 'obj':objective, 'harp':harp}
 
 interfaces = {}
 
-def set_interfaces(caller:str,state:bool) -> None:
+def set_interfaces(caller:str,state:bool,control:str=None) -> None:
+    log.debug(f"{caller} is setting interfaces {state}.")
     if caller not in interfaces.keys():
-        raise ValueError(f"{caller} not in dict of interfaces: {list(interfaces.keys())}")
+        raise ValueError(f"{interface} not in dict of interfaces: {list(interfaces.keys())}")
     for name,interface in interfaces.items():
         if state:
             log.debug(f"Enabling {name} controls.")
         else:
             log.debug(f"Disabling {name} controls.")
-        interface.set_controls(state)
+        interface.set_controls(state,control)
     interfaces[caller].set_params(state)
 
 counter = CounterInterface(set_interfaces,fpga)
@@ -180,4 +181,5 @@ for interface in interfaces.values():
     interface.initialize()
 
 dpg.set_primary_window('main_window',True)
+dpg.show_metrics()
 rdpg.start_dpg()
