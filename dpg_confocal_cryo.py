@@ -12,6 +12,8 @@ from interfaces.piezos import PiezoInterface
 from interfaces.piezo_optimizer import PiezoOptInterface
 from interfaces.picoharp import PicoHarpInterface
 
+import yappi
+
 import apis.rdpg as rdpg
 dpg = rdpg.dpg
 

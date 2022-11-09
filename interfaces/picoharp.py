@@ -168,10 +168,12 @@ class PicoHarpInterface(Interface):
 
     def start_count(self, sender, app_data, user_data):
         if app_data:
+            self.set_interfaces("pico",False, "pico_count")
             self.harp.stop_meas()
             self.harp.clear_hist_mem()
             self.harp.start_meas(tacq = self.tree["Counting/Time"] * 1000)
         else:
+            self.set_interfaces("pico",True, "pico_count")
             self.harp.stop_meas()
 
     def set_fit(self, sender, app_data, user_data):
@@ -303,6 +305,7 @@ class PicoHarpInterface(Interface):
                     print(e)
 
             if not dpg.get_value('pico_count') and prev_count:
+                self.set_interfaces("pico",True, "pico_count")
                 self.harp.get_histogram()
                 times, hist = self.harp.times/1000, self.harp.histogram                
                 times, counts = _strip_trailing_zeros(times,hist)
