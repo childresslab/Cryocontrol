@@ -145,7 +145,7 @@ class CounterInterface(Interface):
     def plot_counts(self,*args):
         if self.plot_thread is None or not self.plot_thread.is_alive():
             self.plot_thread = Thread(target=self.plot_counts_thread)
-            self.plot_thread.run()
+            self.plot_thread.start()
 
     def plot_counts_thread(self):
         """
@@ -175,7 +175,7 @@ class CounterInterface(Interface):
     def draw_count(self,val):
         if self.draw_thread is None or not self.draw_thread.is_alive():
             self.draw_thread = Thread(target=self.draw_count_thread, args=(val,))
-            self.draw_thread.run()
+            self.draw_thread.start()
 
     def draw_count_thread(self,val):
         """

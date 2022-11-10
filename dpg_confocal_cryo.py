@@ -12,17 +12,11 @@ from interfaces.piezos import PiezoInterface
 from interfaces.piezo_optimizer import PiezoOptInterface
 from interfaces.picoharp import PicoHarpInterface
 
-import yappi
+from threading import Thread
 
 import apis.rdpg as rdpg
 dpg = rdpg.dpg
 
-#TODO TODO TODO TODO TODO
-# Add tooltips to everything!
-# Remove uneeded plus/minus boxes
-# Tune step value on plus/minus boxes
-# Documentation
-#TODO TODO TODO TODO TODO
 import logging
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
@@ -34,9 +28,31 @@ objective = DummyObjective()
 harp = PicoHarp()
 devices = {'fpga':fpga, 'obj':objective, 'harp':harp}
 
+# Dictionary to hold all loaded interfaces.
 interfaces = {}
 
+# Shared function for enabling and disabling interfaces.
 def set_interfaces(caller:str,state:bool,control:str=None) -> None:
+    """Loops through the loaded interfaces enabling or disabling their listed
+    controls and paramters according to <state>.
+
+    Parameters
+    ----------
+    caller : str
+        The string name of the interface making the call. This sets the interface
+        that will have its parameters disabled, as well as its controls.
+    state : bool
+        True to enable the controls/parameters false to disable them.
+    control : str, optional
+        The string tag of a control whose state shouldn't be altered useful
+        for skipping the control that is currently running so it can be disabled, 
+        by default None
+
+    Raises
+    ------
+    ValueError
+        If the calling interface is not a valid name.
+    """
     log.debug(f"{caller} is setting interfaces {state}.")
     if caller not in interfaces.keys():
         raise ValueError(f"{interface} not in dict of interfaces: {list(interfaces.keys())}")
@@ -48,21 +64,15 @@ def set_interfaces(caller:str,state:bool,control:str=None) -> None:
         interface.set_controls(state,control)
     interfaces[caller].set_params(state)
 
+# Setup Counter Interface
 counter = CounterInterface(set_interfaces,fpga)
-get_count = counter.get_count
-abort_counts = counter.abort_counts
-plot_counts = counter.plot_counts
-start_counts = counter.start_counts
 interfaces['counter'] = counter
 
+# Setup Galvo Interface
 galvo = GalvoInterface(set_interfaces,fpga,counter)
-set_galvo = galvo.set_galvo
-galvo_plot = galvo.plot
-galvo_controls = galvo.controls
-galvo_params = galvo.params
 interfaces['galvo'] = galvo
 
-# Setup Galvo Optimizer
+# Setup Galvo Optimizer Interface
 galvo_opt = GalvoOptInterface(set_interfaces,fpga,galvo,counter)
 interfaces["galvo_opt"] = galvo_opt
 
@@ -93,13 +103,15 @@ def choose_save_dir(*args):
 
 def set_save_dir(sender,chosen_dir,user_data):
     """
-    Callback to actually set the value from the chosen file.
+    Callback to actually set the value from the chosen file in choose_save_dir.
     """
     dpg.set_value("save_dir",chosen_dir['file_path_name'])
 
 ################################################################################
 ############################### UI Building ####################################
 ################################################################################
+# Initializiation of dearpygui and adding a theme for some averaged counts.add()
+# New themes and fonts can be defined here.
 rdpg.initialize_dpg("Cryocontrol",docking=False)
 with dpg.theme(tag="avg_count_theme"):
     with dpg.theme_component(dpg.mvLineSeries):
@@ -108,6 +120,7 @@ with dpg.theme(tag="avg_count_theme"):
 ###############
 # Main Window #
 ###############
+# Setup the main window
 with dpg.window(label="Cryocontrol", tag='main_window'):
     ##################
     # Persistant Bar #
@@ -121,7 +134,7 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
                 dpg.add_button(label="Pick Directory", callback=choose_save_dir)
             # Counts and Optimization
             with dpg.group(horizontal=True):
-                dpg.add_checkbox(tag="count", label="Count", callback=start_counts)
+                dpg.add_checkbox(tag="count", label="Count", callback=counter.start_counts)
                 dpg.add_button(tag="clear_counts", label="Clear Counts",callback=counter.clear_counts)
                 dpg.add_button(tag="optimize", label="Optimize Galvo", callback=galvo_opt.optimize_galvo)
             # Progress Bar
@@ -136,6 +149,7 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
     ##############
     # START TABS #
     ##############
+    # Each tab holds an interface which takes care of creating its own GUI.
     with dpg.tab_bar():
         # ###############
         # # COUNTER TAB #
@@ -178,10 +192,15 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
 ##################
 # Initialization #
 ##################
-# Initialize all interfaces
+# Initialize all interfaces, which requires that their GUI exists first.
 for interface in interfaces.values():
     interface.initialize()
 
+# Make the main window take up the whole page.
 dpg.set_primary_window('main_window',True)
-dpg.show_metrics()
-rdpg.start_dpg()
+
+# Start the application.
+# Running this in a seperate thread should be okay and allow for terminal control
+# However, this may cause issues on macOS if you're trying to develope from there.
+dpg_thread = Thread(target=rdpg.start_dpg)
+dpg_thread.start()

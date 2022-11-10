@@ -234,7 +234,7 @@ class PicoHarpInterface(Interface):
             self.harp.acq_time = self.tree['Counting/Time']
 
     def save_pico(self, sender, app_data, user_data):
-        self.harp.save(Path(dpg.get_value('save_pico_file')))
+        self.harp.save(Path(dpg.get_value('save_dir'))/Path(dpg.get_value('save_pico_file')))
 
     def set_rate_plot(self, sender, app_data, user_data):
         pass

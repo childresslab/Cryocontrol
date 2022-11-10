@@ -122,7 +122,7 @@ class mvHistPlot():
         self.data = data
         if self.update_thread is None or not self.update_thread.is_alive():
             self.update_thread = Thread(target=self.update_func)
-            self.update_thread.run()
+            self.update_thread.start()
 
     def update_func(self):
         dpg.set_value(f"{self.label}_heat_series", [self.data,[0.0,1.0],[],[],[]])

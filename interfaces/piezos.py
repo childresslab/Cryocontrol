@@ -234,8 +234,8 @@ class PiezoInterface(Interface):
                 if self.tree['Plot/Autoscale']:
                     dpg.set_axis_limits_auto("cav_count_y")
                     dpg.fit_axis_data("cav_count_y")
-            if self.counter.tree["Counts/Plot Scan Counts"]:
-                self.counter.plot_counts()
+                if self.counter.tree["Counts/Plot Scan Counts"]:
+                    self.counter.plot_counts()
 
         def finish(results,completed):
             if self.tree['Plot/Autoscale']:
