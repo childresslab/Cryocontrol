@@ -428,6 +428,8 @@ class PiezoInterface(Interface):
         if not dpg.get_value("pzt_3d_scan"):
             return -1
         self.counter.abort_counts()
+        # To maximize performance, disable plotting of scan counts.
+        self.counter.tree['Counts/Plot Scan Counts'] = False
 
         jpe_steps = self.tree["Scan/JPE/Steps"][:2][::-1]
         jpe_centers = self.tree["Scan/JPE/Center"][:2][::-1]
