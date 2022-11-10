@@ -1,9 +1,9 @@
 import numpy as np
 from apis import rdpg
 from threading import Thread
-import logging as log
+import logging
+log = logging.getLogger(__name__)
 dpg = rdpg.dpg
-log.basicConfig(format='%(levelname)s:%(message)s ', level=log.WARNING)
 
 
 colormaps = {'viridis' : dpg.mvPlotColormap_Viridis,
@@ -122,7 +122,7 @@ class mvHistPlot():
         self.data = data
         if self.update_thread is None or not self.update_thread.is_alive():
             self.update_thread = Thread(target=self.update_func)
-            self.update_thread.run()
+            self.update_thread.start()
 
     def update_func(self):
         dpg.set_value(f"{self.label}_heat_series", [self.data,[0.0,1.0],[],[],[]])
@@ -202,6 +202,7 @@ class mvHistPlot():
     
     def keep_cursor(self,sender,app_data,user_data):
         if sender == f"{self.label}_cc":
+            point = [0,0]
             point[0] = dpg.get_value(f"{self.label}_cx")
             point[1] = dpg.get_value(f"{self.label}_cy")
             dpg.set_value(f"{self.label}_cc",point)

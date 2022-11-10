@@ -1,12 +1,12 @@
 import ctypes as ct
 from multiprocessing.sharedctypes import Value
 import numpy as np
-import logging as log
+import logging
+log = logging.getLogger(__name__)
 from pathlib import Path
 
 from numpy.typing import NDArray
 from typing import Union
-log.basicConfig(format='%(levelname)s:%(message)s ', level=log.DEBUG)
 
 MAXDEVNUM = 8
 HISTCHAN = 65536

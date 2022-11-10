@@ -13,8 +13,12 @@ gummy.nsig = 1
 from pathlib import Path
 
 import datetime as dt
-import logging as log
+import logging
+log = logging.getLogger(__name__)
 import numpy as np
+
+from logging import getLogger
+log = getLogger(__name__)
 
 dpg = rdpg.dpg
 
@@ -26,7 +30,14 @@ class PicoHarpInterface(Interface):
         self.treefix = treefix
 
         self.controls = []
-        self.params = []
+        self.params = [f"{self.treefix}_Counting/Time",
+                       f"{self.treefix}_Counting/Stop",
+                       f"{self.treefix}_Counting/Stop At",
+                       f"{self.treefix}_Counting/Divider",
+                       f"{self.treefix}_Counting/Binning",
+                       f"{self.treefix}_Advanced/CFD Zero",
+                       f"{self.treefix}_Advanced/CFD Crossing",
+                       f"{self.treefix}_Advanced/Sync Offset"]
 
         # Hardcoded, probably dumb
         irf_edges,irf_counts = lifetime_fitter.import_pico(r"X:\DiamondCloud\Cryostat setup\Data\2022-04-07_sample_fluro_scans\lifetime\IRF_offset.dat")
@@ -42,6 +53,11 @@ class PicoHarpInterface(Interface):
                           'chn2_rate' : []}
         
         self.update_thread = None
+    
+    def initialize(self):
+        if not self.gui_exists:
+            raise RuntimeError("GUI must be made before initialization.")
+        self.tree.load()
 
     def makeGUI(self,parent):
         self.parent = parent
@@ -54,7 +70,7 @@ class PicoHarpInterface(Interface):
                 dpg.add_button(tag="clear_pico_rate", label="Clear Rate", callback=self.clear_rates)
 
         with dpg.group(horizontal=True, width=0):
-            with dpg.child_window(width=400,autosize_x=False,autosize_y=True,tag="pico_tree"):
+            with dpg.child_window(width=400,autosize_x=False,autosize_y=True,tag=self.treefix):
                 self.tree = rdpg.TreeDict(f"{self.treefix}",f'cryo_gui_settings/{self.treefix}_save.csv')
                 self.tree.add("Picoharp/Initialized",False,save=False,callback=self.toggle_init)
                 self.tree.add("Picoharp/Update Rate", 1)
@@ -138,6 +154,7 @@ class PicoHarpInterface(Interface):
                         dpg.bind_item_theme("chn1_rate_plot","plot_theme_blue")
                         dpg.bind_item_theme("chn2_rate_plot","plot_theme_blue")
                         dpg.add_plot_legend(location=dpg.mvPlot_Location_NorthEast)
+        self.gui_exists = True
 
     def toggle_init(self, sender, app_data, user_data):
         if app_data:
@@ -151,10 +168,12 @@ class PicoHarpInterface(Interface):
 
     def start_count(self, sender, app_data, user_data):
         if app_data:
+            self.set_interfaces("pico",False, "pico_count")
             self.harp.stop_meas()
             self.harp.clear_hist_mem()
             self.harp.start_meas(tacq = self.tree["Counting/Time"] * 1000)
         else:
+            self.set_interfaces("pico",True, "pico_count")
             self.harp.stop_meas()
 
     def set_fit(self, sender, app_data, user_data):
@@ -215,7 +234,7 @@ class PicoHarpInterface(Interface):
             self.harp.acq_time = self.tree['Counting/Time']
 
     def save_pico(self, sender, app_data, user_data):
-        self.harp.save(Path(dpg.get_value('save_pico_file')))
+        self.harp.save(Path(dpg.get_value('save_dir'))/Path(dpg.get_value('save_pico_file')))
 
     def set_rate_plot(self, sender, app_data, user_data):
         pass
@@ -286,6 +305,7 @@ class PicoHarpInterface(Interface):
                     print(e)
 
             if not dpg.get_value('pico_count') and prev_count:
+                self.set_interfaces("pico",True, "pico_count")
                 self.harp.get_histogram()
                 times, hist = self.harp.times/1000, self.harp.histogram                
                 times, counts = _strip_trailing_zeros(times,hist)

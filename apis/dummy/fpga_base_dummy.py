@@ -6,9 +6,10 @@
 import numpy as np
 from time import time
 from time import sleep
+from apis.fpga_base import FPGAValueError
 
-class FPGAValueError(Exception):
-    pass
+from logging import getLogger
+log = getLogger(__name__)
 
 # Functions for converting between fpga bits and volts
 def _volts_to_bits(voltage, vmax, bit_depth):

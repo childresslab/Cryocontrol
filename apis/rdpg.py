@@ -2,11 +2,12 @@ import dearpygui.dearpygui as dpg
 from datetime import datetime as dt
 from typing import Callable, Union, Any
 from pathlib import Path
+import numpy as np
+from numpy.typing import NDArray
 from ast import literal_eval
 
-import logging as log
-log.basicConfig(format='%(levelname)s:%(message)s ', level=log.INFO)
-
+import logging
+log = logging.getLogger(__name__)
 
 class TreeDict():
     def __init__(self, parent:Union[str,int], savename:str) -> None:
@@ -253,7 +254,7 @@ class TreeDict():
 def offset_timezone(timestamps:list[float]) -> list[float]:
     now = dt.now().timestamp()
     offset = (dt.utcfromtimestamp(now) - dt.fromtimestamp(now)).seconds
-    return [timestamp - offset for timestamp in timestamps]
+    return list(np.array(timestamps) - offset)
 
 def make_font_registry():
     with dpg.font_registry():

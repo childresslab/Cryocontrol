@@ -1,19 +1,12 @@
 import numpy as np
 import lmfit as lm
-from warnings import warn
-import logging as log
 import matplotlib.pyplot as plt
-from matplotlib.offsetbox import AnchoredText
 from scipy.special import erfc
 import corner
 from pathlib import Path
 from metrolopy import gummy
 gummy.style = 'pm'
 gummy.nsig = 1
-## DEBUG
-#log.basicConfig(format='%(levelname)s:%(message)s ', level=log.DEBUG)
-## WARNING
-log.basicConfig(format='%(levelname)s:%(message)s ', level=log.WARNING)
 
 def subarray_idxs(values,threshold=5):
     idxs = [0]
@@ -60,10 +53,7 @@ def import_pico(filename):
                 header_lines += 1
             elif "#counts" == line.strip():
                 reached_counts = True
-    log.debug(f"{channels = }, {ns_per_channel = }")
     counts = np.genfromtxt(filename,skip_header=header_lines,dtype=int)
-    if len(counts) != channels:
-        log.warning("Number of counts read doesn't match given number of channels.")
     edges = np.arange(0,channels+1,1) * ns_per_channel
     return np.array(edges),np.array(counts)
 

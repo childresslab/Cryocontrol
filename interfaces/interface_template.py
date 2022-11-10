@@ -1,4 +1,5 @@
-import logging as log
+from logging import getLogger
+log = getLogger(__name__)
 
 from apis import rdpg
 from typing import Union
@@ -10,9 +11,13 @@ class Interface():
         self.controls = []
         self.params = []
         self.parent = None
+        self.gui_exists = False
 
     def makeGUI(self,parent:Union[str,int]) -> None:
         self.parent = parent
+        raise NotImplementedError("This should be overloaded.")
+
+    def initialize(self) -> None:
         raise NotImplementedError("This should be overloaded.")
 
     def set_params(self,state:bool) -> None:
@@ -25,12 +30,14 @@ class Interface():
                 log.debug(f"Disabling {param}")
                 dpg.disable_item(param)
 
-    def set_controls(self,state:bool) -> None:
+    def set_controls(self,state:bool,ignore:str=None) -> None:
         if state:
             for control in self.controls:
-                log.debug(f"Enabling {control}")
-                dpg.enable_item(control)
+                if control != ignore:
+                    log.debug(f"Enabling {control}")
+                    dpg.enable_item(control)
         else:
             for control in self.controls:
-                log.debug(f"Disabling {control}")
-                dpg.disable_item(control)
+                if control != ignore:
+                    log.debug(f"Disabling {control}")
+                    dpg.disable_item(control)
