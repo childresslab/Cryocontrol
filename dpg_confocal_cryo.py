@@ -14,6 +14,8 @@ from interfaces.picoharp import PicoHarpInterface
 
 from threading import Thread
 
+from typing import Union
+
 import apis.rdpg as rdpg
 dpg = rdpg.dpg
 
@@ -32,7 +34,7 @@ devices = {'fpga':fpga, 'obj':objective, 'harp':harp}
 interfaces = {}
 
 # Shared function for enabling and disabling interfaces.
-def set_interfaces(caller:str,state:bool,control:str=None) -> None:
+def set_interfaces(caller:str,state:bool,control:Union[list[str],str]=None,ignore:Union[list[str],str]=None) -> None:
     """Loops through the loaded interfaces enabling or disabling their listed
     controls and paramters according to <state>.
 
@@ -43,26 +45,45 @@ def set_interfaces(caller:str,state:bool,control:str=None) -> None:
         that will have its parameters disabled, as well as its controls.
     state : bool
         True to enable the controls/parameters false to disable them.
-    control : str, optional
+    control : Union[list[str],str], optional
         The string tag of a control whose state shouldn't be altered useful
         for skipping the control that is currently running so it can be disabled, 
         by default None
+    ignore : Union[list[str],str], optinal
+        An interface name or list of interface names to skip
 
     Raises
     ------
     ValueError
         If the calling interface is not a valid name.
     """
+    if isinstance(ignore,str):
+        ignore = [ignore]
+    if isinstance(control,str):
+        control = [control]
     log.debug(f"{caller} is setting interfaces {state}.")
-    if caller not in interfaces.keys():
-        raise ValueError(f"{interface} not in dict of interfaces: {list(interfaces.keys())}")
+    if caller not in interfaces.keys() and caller is not None:
+        raise ValueError(f"{caller} not in dict of interfaces: {list(interfaces.keys())}")
     for name,interface in interfaces.items():
-        if state:
-            log.debug(f"Enabling {name} controls.")
-        else:
-            log.debug(f"Disabling {name} controls.")
-        interface.set_controls(state,control)
-    interfaces[caller].set_params(state)
+        if name not in ignore:
+            if state:
+                log.debug(f"Enabling {name} controls.")
+            else:
+                log.debug(f"Disabling {name} controls.")
+            interface.set_controls(state,control)
+    if caller is not None:
+        interfaces[caller].set_params(state)
+
+def toggle_fpga(sender,value,user_data):
+    if value:
+        fpga.open_fpga()
+        set_interfaces(None,True,[],['obj'])
+        dpg.enable_item('obj_scan')
+    else:
+        fpga.close_fpga()
+        set_interfaces(None,False,[],['obj'])
+        dpg.disable_item('obj_scan')
+
 
 # Setup Counter Interface
 counter = CounterInterface(set_interfaces,fpga)
@@ -136,6 +157,7 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
             with dpg.group(horizontal=True):
                 dpg.add_checkbox(tag="count", label="Count", callback=counter.start_counts)
                 dpg.add_button(tag="clear_counts", label="Clear Counts",callback=counter.clear_counts)
+                dpg.add_checkbox(tag="FPGA_connected", default_value=True, label="FPGA", callback=toggle_fpga)
                 dpg.add_button(tag="optimize", label="Optimize Galvo", callback=galvo_opt.optimize_galvo)
             # Progress Bar
             with dpg.group(horizontal=True):
