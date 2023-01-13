@@ -283,9 +283,9 @@ class PiezoOptInterface(Interface):
             # If the desired position is outside range, we just use the starting
             # position.
             try:
-                self.piezo.set_jpe_xy(optim,self.fpga.get_jpe_pzs()[1])
+                self.piezo.set_jpe_xy(optim,self.fpga.get_jpe_pzs()[1], write=True)
             except FPGAValueError:
-                self.piezo.set_jpe_xy(*self.position_register['temp_jpe_position'][:2])
+                self.piezo.set_jpe_xy(*self.position_register['temp_jpe_position'][:2],write=True)
             # Plot the fit on the optimization plot
             new_axis = np.linspace(np.min(positions),np.max(positions),1000)
             fit_data = fit_x.eval(fit_x.params,x=new_axis)
@@ -333,9 +333,9 @@ class PiezoOptInterface(Interface):
             vals = fit_y.best_values
             optim = vals['center']
             try:
-                self.piezo.set_jpe_xy(self.fpga.get_jpe_pzs()[0],optim)
+                self.piezo.set_jpe_xy(self.fpga.get_jpe_pzs()[0],optim, write=True)
             except FPGAValueError:
-                self.piezo.set_jpe_xy(*self.position_register['temp_jpe_position'][:2])
+                self.piezo.set_jpe_xy(*self.position_register['temp_jpe_position'][:2],write=True)
             # Plot the fit.
             new_axis = np.linspace(np.min(positions),np.max(positions),1000)
             fit_data = fit_y.eval(fit_y.params,x=new_axis)
@@ -416,9 +416,9 @@ class PiezoOptInterface(Interface):
             # If the desired position is outside range, we just use the starting
             # position.
             try:
-                self.piezo.set_cav_pos(optim)
+                self.piezo.set_cav_pos(optim,write=True)
             except FPGAValueError:
-                self.piezo.set_cav_pos(self.position_register['temp_cav_position'])
+                self.piezo.set_cav_pos(self.position_register['temp_cav_position'],write=True)
             except TimeoutError:
                 self.piezo.set_cav_pos(optim,write=False)
             # Plot the fit.
@@ -486,9 +486,9 @@ class PiezoOptInterface(Interface):
             # If the desired position is outside range, we just use the starting
             # position.
             try:
-                self.piezo.set_cav_pos(optim)
+                self.piezo.set_cav_pos(optim,write=True)
             except FPGAValueError:
-                self.piezo.set_cav_pos(self.position_register['temp_cav_position'])
+                self.piezo.set_cav_pos(self.position_register['temp_cav_position'],write=True)
             except TimeoutError:
                 self.piezo.set_cav_pos(optim,write=False)
             self.optimize_cav_fine_loop()

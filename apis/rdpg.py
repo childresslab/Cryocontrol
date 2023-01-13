@@ -282,7 +282,8 @@ def make_disabled_theme():
              dpg.mvSliderFloatMulti,
              dpg.mvSliderIntMulti,
              dpg.mvInputIntMulti,
-             dpg.mvInputFloatMulti]
+             dpg.mvInputFloatMulti,
+             dpg.mvCheckbox]
              #dpg.mvInputDouble,
              #dpg.mvInputDoubleMulti,
              #dpg.mvDragDouble,

@@ -55,7 +55,7 @@ class CryoFPGA(fb.NiFPGA):
         self.set_AO_range(self._jpe_due,   [-6.5,0])
         self.set_AO_range(self._jpe_tre,   [-6.5,0])
 
-        self.on_activate()
+        self.open_fpga()
 
     def set_jpe_pzs(self, x:float = None, y:float = None, z:float = None, write:bool=True) -> None:
         volts = [x,y,z]

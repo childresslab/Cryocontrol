@@ -685,7 +685,7 @@ class PiezoInterface(Interface):
         log.debug(f"Set JPE Tilted Z to {z}")
         self.draw_bounds()
 
-    def set_cav_pos(self,z,write=False):
+    def set_cav_pos(self,z,write=True):
         self.fpga.set_cavity(z,write=write)
         self.tree["Cavity/Position"] = z
         log.debug(f"Set cavity to {z} V.")

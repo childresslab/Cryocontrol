@@ -62,7 +62,7 @@ class NiFPGA():
         self._clock_frequency = 120E6
         self._voltage_ranges = np.tile(self._max_voltage_range, [self._n_AO,1])
 
-    def on_activate(self):
+    def open_fpga(self):
         """ Initialisation performed during activation of the module.
         """
         # Open the session with the FPGA card
@@ -303,6 +303,7 @@ class NiFPGA():
         try:
             for fifo in self._fpga.fifos.keys():
                 self._fpga.fifos[fifo].stop()
+            self._fpga.close()
         except:
             print("Couldn't Stop FIFOs")
             raise

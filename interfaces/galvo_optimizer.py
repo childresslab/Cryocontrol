@@ -229,9 +229,9 @@ class GalvoOptInterface(Interface):
             # If the desired position is outside range, we just use the starting
             # position.
             try:
-                self.galvo.set_galvo(optim,self.fpga.get_galvo()[1])
+                self.galvo.set_galvo(optim,self.fpga.get_galvo()[1],write=True)
             except FPGAValueError:
-                self.galvo.set_galvo(*self.position_register['temp_galvo_position'])
+                self.galvo.set_galvo(*self.position_register['temp_galvo_position'],write=True)
             # Plot the fit on the optimization plot
             new_axis = np.linspace(np.min(positions),np.max(positions),1000)
             fit_data = fit_x.eval(fit_x.params,x=new_axis)
@@ -281,9 +281,9 @@ class GalvoOptInterface(Interface):
             optim = min(optim,np.max(positions))
             optim = max(optim,np.min(positions))
             try:
-                self.galvo.set_galvo(self.fpga.get_galvo()[0],optim)
+                self.galvo.set_galvo(self.fpga.get_galvo()[0],optim,write=True)
             except FPGAValueError:
-                self.galvo.set_galvo(*self.position_register['temp_galvo_position'])
+                self.galvo.set_galvo(*self.position_register['temp_galvo_position'],write=True)
             # Plot the fit.
             new_axis = np.linspace(np.min(positions),np.max(positions),1000)
             fit_data = fit_y.eval(fit_y.params,x=new_axis)

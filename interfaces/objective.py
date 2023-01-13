@@ -34,23 +34,25 @@ class ObjectiveInterface(Interface):
         # Initialize the objective hist plot, which contains the heatmap and histogram of the data.
         self.obj_plot = mvHistPlot("Obj. Plot",False,None,True,False,1000,0,300,50,'viridis',True,1,1E9,50,50)
 
-        objective_controls = [f"{self.treefix}_Objective/Initialize",
-                              f"{self.treefix}_Objective/Set Position (um)",
-                              f"{self.treefix}_Objective/Limits (um)",
-                              f"{self.treefix}_Objective/Max Move (um)",
-                              "obj_scan",
-                              "obj_up",
-                              "obj_dn",
-                              "obj_get_errors"]
-        objective_params = [f"{self.treefix}_Scan/Count Time (ms)",
-                            f"{self.treefix}_Scan/Wait Time (ms)",
-                            f"{self.treefix}_Scan/Obj./Center (um)",
-                            f"{self.treefix}_Scan/Obj./Span (um)",
-                            f"{self.treefix}_Scan/Obj./Steps",
-                            f"{self.treefix}_Scan/Galvo/Axis",
-                            f"{self.treefix}_Scan/Galvo/Center (V)",
-                            f"{self.treefix}_Scan/Galvo/Span (V)",
-                            f"{self.treefix}_Scan/Galvo/Steps"]
+        self.controls = [f"{self.treefix}_Objective/Initialize",
+                         f"{self.treefix}_Objective/Set Position (um)",
+                         f"{self.treefix}_Objective/Limits (um)",
+                         f"{self.treefix}_Objective/Max Move (um)",
+                         "obj_scan",
+                         "obj_up",
+                         "obj_dn",
+                         "obj_get_errors"]
+                         
+        self.params = [f"{self.treefix}_Scan/Count Time (ms)",
+                       f"{self.treefix}_Scan/Wait Time (ms)",
+                       f"{self.treefix}_Scan/Obj./Center (um)",
+                       f"{self.treefix}_Scan/Obj./Span (um)",
+                       f"{self.treefix}_Scan/Obj./Steps",
+                       f"{self.treefix}_Scan/Galvo/Axis",
+                       f"{self.treefix}_Scan/Galvo/Center (V)",
+                       f"{self.treefix}_Scan/Galvo/Span (V)",
+                       f"{self.treefix}_Scan/Galvo/Steps"]
+
     def initialize(self):
         if not self.gui_exists:
             raise RuntimeError("GUI must be made before initialization.")

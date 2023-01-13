@@ -26,7 +26,7 @@ class CounterInterface(Interface):
         self.data = {'counts':[0],
                      'AI1' :[0],
                      'time':[datetime.now().timestamp()]}
-        self.controls = []
+        self.controls = ['count']
 
         params = ["Counts/Count Time (ms)", 
                   "Counts/Wait Time (ms)", 
