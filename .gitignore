@@ -1,6 +1,5 @@
 # Settings Files
 cryo_gui_settings/
-app_config.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -131,4 +130,3 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
-app_config.json
