@@ -1,9 +1,5 @@
 import dearpygui.dearpygui as dpg
 
-from apis.dummy.fpga_cryo_dummy import DummyCryoFPGA
-from apis.dummy.objective_dummy import DummyObjective
-from apis.picoharp import PicoHarp
-
 from interfaces.counter import CounterInterface
 from interfaces.galvo import GalvoInterface
 from interfaces.galvo_optimizer import GalvoOptInterface
@@ -20,14 +16,36 @@ import apis.rdpg as rdpg
 dpg = rdpg.dpg
 
 import logging
+import json
+
 log = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
+with open("./app_config.json",'r') as f:
+    config = json.load(f)
 
 # Setup control, devices should be defined outside interfaces to allow interuse
-log.warning("Using Dummy Controls")
-fpga = DummyCryoFPGA()
-objective = DummyObjective()
-harp = PicoHarp()
+if bool(config['dummy']):
+    logging.basicConfig(level=logging.DEBUG)
+    from apis.dummy.fpga_cryo_dummy import DummyCryoFPGA
+    from apis.dummy.objective_dummy import DummyObjective
+    from apis.picoharp import PicoHarp
+
+    # Setup Dummy Control for Simulations/Debugging
+    log.warning("Using Dummy Controls")
+    fpga = DummyCryoFPGA()
+    objective = DummyObjective()
+    harp = PicoHarp()
+else:
+    logging.basicConfig(level=logging.WARNING)
+    from apis.fpga_cryo import CryoFPGA
+    from apis.objective_control import Objective
+    from apis.picoharp import PicoHarp
+
+    # Setup real control
+    log.warning("Using Real Controls")
+    fpga = CryoFPGA()
+    objective = Objective()
+    harp = PicoHarp()
+
 devices = {'fpga':fpga, 'obj':objective, 'harp':harp}
 
 # Dictionary to hold all loaded interfaces.
@@ -59,8 +77,13 @@ def set_interfaces(caller:str,state:bool,control:Union[list[str],str]=None,ignor
     """
     if isinstance(ignore,str):
         ignore = [ignore]
+    elif ignore is None:
+        ignore = []
     if isinstance(control,str):
         control = [control]
+    elif control is None:
+        control = []
+        
     log.debug(f"{caller} is setting interfaces {state}.")
     if caller not in interfaces.keys() and caller is not None:
         raise ValueError(f"{caller} not in dict of interfaces: {list(interfaces.keys())}")
@@ -151,7 +174,7 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
             # Data Directory
             with dpg.group(horizontal=True):
                 dpg.add_text("Data Directory:")
-                dpg.add_input_text(default_value="X:\\DiamondCloud\\Cryostat Setup", tag="save_dir",width=-1)
+                dpg.add_input_text(default_value=config["data_folder"], tag="save_dir",width=-1)
                 dpg.add_button(label="Pick Directory", callback=choose_save_dir)
             # Counts and Optimization
             with dpg.group(horizontal=True):
