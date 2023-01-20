@@ -1,4 +1,4 @@
-import NKTP_DLL as nktpdll
+from . import NKTP_DLL as nktpdll
 
 class SuperK():
 

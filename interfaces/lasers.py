@@ -19,12 +19,13 @@ laser_config = {'1205nm_laser_ip' : '192.169.1.106'}
 
 class LaserInterface(Interface):
 
-    def __init__(self,set_interfaces,fpga,treefix="lasers"):
+    def __init__(self,set_interfaces,fpga,superk,treefix="lasers"):
         super().__init__()
         self.fpga = fpga
         self.set_interfaces = set_interfaces
         self.treefix = treefix        
-
+        self.superk = superk
+        
         self.toptica_ip = laser_config['1205nm_laser_ip']
 
         self.toptica_conn = None
