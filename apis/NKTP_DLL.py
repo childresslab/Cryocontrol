@@ -7,7 +7,8 @@ from collections import namedtuple
 # Try preloading the OS related DLL, x86 or x64.
 # Alternatively copy the correct version into your script folder.
 
-dllFolder = os.environ.get('NKTP_SDK_PATH',r'./')
+#dllFolder = os.environ.get('NKTP_SDK_PATH',r'./')
+dllFolder = ''
 if (ctypes.sizeof(ctypes.c_voidp) == 4):
         print('Loading x86 DLL from:', dllFolder + r'./apis/NKTPDLL.dll')
         NKTPDLL = ctypes.cdll.LoadLibrary( dllFolder + r'./apis/NKTPDLL.dll' )
