@@ -5,9 +5,9 @@ from pathlib import Path
 
 import datetime as dt
 import logging
+import asyncio
 log = logging.getLogger(__name__)
 import numpy as np
-from toptica.lasersdk.dlcpro.v2_5_2 import DLCpro, NetworkConnection
 from logging import getLogger
 log = getLogger(__name__)
 
@@ -19,12 +19,13 @@ laser_config = {'1205nm_laser_ip' : '192.169.1.106'}
 
 class LaserInterface(Interface):
 
-    def __init__(self,set_interfaces,fpga,superk,treefix="lasers"):
+    def __init__(self,set_interfaces,fpga,superk,laser602,treefix="lasers"):
         super().__init__()
         self.fpga = fpga
         self.set_interfaces = set_interfaces
         self.treefix = treefix        
         self.superk = superk
+        self.laser602 = laser602
         
         self.toptica_ip = laser_config['1205nm_laser_ip']
 
@@ -94,22 +95,20 @@ class LaserInterface(Interface):
     # 602 Functions
     def init_toptica(self,*args):
         if args[1]:
-            self.toptica_conn = NetworkConnection(self.toptica_ip)
-            self.toptica_laser = DLCpro(self.toptica_conn)
-            self.toptica_laser.open()
+            self.laser602.open()
             self.tree['602/Connected'] = True
+            self.tree['602/Emission Enabled'] = self.laser602.emission_button_enabled.get()
         else:
-            self.toptica_laser.close()
-            self.toptica_conn = None
-            self.toptica_laser = None
+            self.laser602.close()
             self.tree['602/Connected'] = False
+
 
     def toggle_toptica(self,*args):
         if args[1]:
-            self.toptica_laser.laser1.cc.enabled.set(True)
+            self.laser602.laser1.dl.cc.enabled.set(True)
             self.tree['602/Firing'] = True
         else:
-            self.toptica_laser.laser.cc.enabled.set(False)
+            self.laser602.laser1.dl.cc.enabled.set(False)
             self.tree['602/Firing'] = False
 
     # SuperK Functions

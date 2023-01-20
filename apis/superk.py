@@ -1,4 +1,6 @@
 from . import NKTP_DLL as nktpdll
+import logging
+log = logging.getLogger(__name__)
 
 class SuperK():
 
@@ -8,16 +10,20 @@ class SuperK():
     
     def writeU8(self,reg,value,index=-1):
         result = nktpdll.registerWriteU8(self.port,self.mod_addr,reg,value,index)
+        log.debug(f"Writing Register: {nktpdll.RegisterResultTypes(result)}")
     
     def readU8(self,reg,index=-1):
         result, value = nktpdll.registerReadU8(self.port,self.mod_addr,reg,index)
+        log.debug(f"Reading Register: {nktpdll.RegisterResultTypes(result)}")
         return value
 
     def writeU32(self,reg,value,index=-1):
         result = nktpdll.registerWriteU32(self.port,self.mod_addr,reg,value,index)
+        log.debug(f"Writing Register: {nktpdll.RegisterResultTypes(result)}")
     
     def readU32(self,reg,index=-1):
         result, value = nktpdll.registerReadU32(self.port,self.mod_addr,reg,index)
+        log.debug(f"Reading Register: {nktpdll.RegisterResultTypes(result)}")
         return value
 
     def max_pulse_rate(self):
@@ -25,9 +31,11 @@ class SuperK():
 
     def initialize(self):
         result = nktpdll.openPorts(self.port,0,0)
+        log.debug(f'Opening Port:{nktpdll.PortResultTypes(result)}')
 
     def deinitialize(self):
         result = nktpdll.closePorts(self.port)
+        log.debug(f'Closing Port:{nktpdll.PortResultTypes(result)}')
 
     def turn_on(self):
         self.writeU8(0x30,1,-1)
