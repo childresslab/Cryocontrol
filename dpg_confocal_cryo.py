@@ -7,6 +7,7 @@ from interfaces.objective import ObjectiveInterface
 from interfaces.piezos import PiezoInterface
 from interfaces.piezo_optimizer import PiezoOptInterface
 from interfaces.picoharp import PicoHarpInterface
+from interfaces.lasers import LaserInterface
 
 from threading import Thread
 
@@ -28,25 +29,39 @@ if bool(config['dummy']):
     from apis.dummy.fpga_cryo_dummy import DummyCryoFPGA
     from apis.dummy.objective_dummy import DummyObjective
     from apis.picoharp import PicoHarp
+    from apis.superk import SuperK
+    from toptica.lasersdk.dlcpro.v2_5_2 import DLCpro, NetworkConnection
 
     # Setup Dummy Control for Simulations/Debugging
     log.warning("Using Dummy Controls")
     fpga = DummyCryoFPGA()
     objective = DummyObjective()
     harp = PicoHarp()
+    superk = SuperK('COM4')
+    # Toptica connections must absolutely be opened in the main thread
+    # otherwise weird asynchronous stuff goes wrong.
+    _conn = NetworkConnection('192.168.1.106')
+    laser602 = DLCpro(_conn)
 else:
     logging.basicConfig(level=logging.WARNING)
     from apis.fpga_cryo import CryoFPGA
     from apis.objective_control import Objective
     from apis.picoharp import PicoHarp
+    from apis.superk import SuperK
+    from toptica.lasersdk.dlcpro.v2_5_2 import DLCpro, NetworkConnection
 
     # Setup real control
     log.warning("Using Real Controls")
     fpga = CryoFPGA()
     objective = Objective()
     harp = PicoHarp()
+    superk = SuperK('COM4')
+    # Toptica connections must absolutely be opened in the main thread
+    # otherwise weird asynchronous stuff goes wrong.
+    _conn = NetworkConnection('192.168.1.106')
+    laser602 = DLCpro(_conn)
 
-devices = {'fpga':fpga, 'obj':objective, 'harp':harp}
+devices = {'fpga':fpga, 'obj':objective, 'harp':harp, 'superk':superk, 'laser602':laser602}
 
 # Dictionary to hold all loaded interfaces.
 interfaces = {}
@@ -135,6 +150,10 @@ interfaces["pzt_opt"] = pzt_opt
 # Setup Picoharp
 pico = PicoHarpInterface(set_interfaces, harp)
 interfaces['pico'] = pico
+
+# Setup Lasers
+lasers = LaserInterface(set_interfaces,fpga,superk,laser602)
+interfaces['lasers'] = lasers
 
 # Saving Scans
 def choose_save_dir(*args):
@@ -233,6 +252,9 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
 
         with dpg.tab(label="Picoharp"):
             pico.makeGUI(dpg.last_item())
+        
+        with dpg.tab(label="Lasers"):
+            lasers.makeGUI(dpg.last_item())
 
 ##################
 # Initialization #
