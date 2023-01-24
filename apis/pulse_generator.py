@@ -60,7 +60,9 @@ class PulseGen():
                        default_dio:list[bool] = None):
         if default_dio is None:
             default_dio = [0] * self.dchns
-        pause_step = {'duration':self.pause_time,
+        if len(default_dio) < self.dchns:
+            raise ValueError(f"Default dio has invalid length {len(default_dio)} must be {self.dchns}.")
+        pause_step = {'duration':self.pt*1E3,
                       'dio_array': default_dio}
         paused_steps = [pause_step] + steps + [pause_step]
         values = list(map(self.parse_step,paused_steps))

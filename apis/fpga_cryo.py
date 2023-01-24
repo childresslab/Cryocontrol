@@ -170,7 +170,7 @@ class CryoFPGA(fb.NiFPGA):
         for step in pulse_pattern:
             self._duration += step['duration'] * 1E-3
 
-        fifo_data = pulser.parse_sequence(pulse_pattern,default_dio=self.get_dio_array())
+        fifo_data = pulser.parse_sequence(pulse_pattern,default_dio=[0,0] + self.get_dio_array())
         self.pulse_fifo_data = fifo_data
 
     def write_pulse_pattern(self) -> None:
