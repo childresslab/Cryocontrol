@@ -112,7 +112,7 @@ class CryoFPGA(fb.NiFPGA):
             self.write_values_to_fpga()
             
     def get_aoms(self) -> list[float]:
-        return self.set_AO_volts([self._red_aom, self._green_aom])
+        return self.get_AO_volts([self._red_aom, self._green_aom])
 
     def get_photodiode(self) -> float:
         return self.get_AI_volts(self._photodiode_in)
@@ -120,6 +120,9 @@ class CryoFPGA(fb.NiFPGA):
     def set_dio_array(self, dio_array:list[int], write:bool=True) -> None:
         if len(dio_array) != len(self._dio_array):
             raise FPGAValueError("Invalid length of dio_array")
+        if any([x not in [0,1] for x in dio_array]):
+            raise FPGAValueError(f"{dio_array} invalid, contains non 0,1 value.")
+        self._dio_array = dio_array
         if write:
             self.write_values_to_fpga()
     def get_dio_array(self) -> list[int]:
