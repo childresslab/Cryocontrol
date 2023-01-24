@@ -112,7 +112,7 @@ class CryoFPGA(fb.NiFPGA):
             self.write_values_to_fpga()
             
     def get_aoms(self) -> list[float]:
-        return self.set_AO_volts([self._red_aom, self._green_aom])
+        return self.get_AO_volts([self._red_aom, self._green_aom])
 
     def get_photodiode(self) -> float:
         return self.get_AI_volts(self._photodiode_in)

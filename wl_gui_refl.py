@@ -46,7 +46,7 @@ def toggle_spectrometer(sender,value,user_data):
         except Exception as err:
             print("Failed to open connection to spectrometer.")
         dpg.set_value("sp_warn", "Please wait for spectrometer to cooldown")
-        dpg.set_value("Spectrometer/Status", "Cooling")
+        wl_tree["Spectrometer/Status"] = "Cooling"
         with dpg.group(horizontal=True,parent="sp_warning"):
             dpg.add_input_float(label="Temperature",tag="spec_temp",step=0,readonly=True)
 
@@ -60,15 +60,15 @@ def toggle_spectrometer(sender,value,user_data):
         dpg.hide_item('sp_load')
         dpg.delete_item('sp_warning')
         set_spectrometer_exp()
-        dpg.set_value("Spectrometer/Status", "Cold")
+        wl_tree["Spectrometer/Status"] = "Cold"
         dpg.set_exit_callback(lambda _: devices['spect'].close if devices['spect'] is not None else None)
 
     else:
-        dpg.set_value("Spectrometer/Status", "Warming")
+        wl_tree["Spectrometer/Status"] = "Warming"
         devices['spect'].stop_cooling()
         devices['spect'].close()
         devices['spect'] = None
-        dpg.set_value("Spectrometer/Status", "Unitialized")
+        wl_tree["Spectrometer/Status"] = "Unitialized"
 
 def set_spectrometer_exp(*args):
     wl_tree.save()

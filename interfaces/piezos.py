@@ -7,6 +7,7 @@ from apis import rdpg
 from pathlib import Path
 from threading import Thread
 from typing import Callable
+from typing import Union
 
 import datetime as dt
 import logging
@@ -83,17 +84,18 @@ class PiezoInterface(Interface):
         self.draw_bounds()
         self.plot.set_cursor(jpe_position[:2])
 
-
-    def set_controls(self,state:bool,ignore:str=None) -> None:
+    def set_controls(self,state:bool,ignore:Union[list[str],str]) -> None:
+        if isinstance(ignore,str):
+            ignore = [ignore]
         if state:
             for control in self.controls:
-                if control != ignore:
+                if control not in ignore:
                     log.debug(f"Enabling {control}")
                     dpg.enable_item(control)
             self.plot.enable_cursor()
         else:
             for control in self.controls:
-                if control != ignore:
+                if control not in ignore:
                     log.debug(f"Disabling {control}")
                     dpg.disable_item(control)
             self.plot.disable_cursor()
