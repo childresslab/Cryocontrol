@@ -16,7 +16,6 @@ class PulseGen():
 
         self.dchns = config['dio_chns']
         self.gate = config['gate_dio_chn']
-        self.user_dio_start = config['dio_chns'] - config['user_dio_chns']
         self.counter = config['counter_dio_chn']
         self.gate = config['gate_dio_chn']
 
@@ -56,9 +55,14 @@ class PulseGen():
             values.append(self.bin_to_int(full_binary))
         return values
     
-    def parse_sequence(self, steps : list[dict[str, object]]):
-        pause_ticks = int(round(self.pt * self.cr)) 
-        values = list(map(self.parse_step,steps))
-        values.append([pause_ticks])
+    def parse_sequence(self, 
+                       steps : list[dict[str, object]], 
+                       default_dio:list[bool] = None):
+        if default_dio is None:
+            default_dio = [0] * self.dchns
+        pause_step = {'duration':self.pause_time,
+                      'dio_array': default_dio}
+        paused_steps = [pause_step] + steps + [pause_step]
+        values = list(map(self.parse_step,paused_steps))
         flat = list(itertools.chain.from_iterable(values))
-        return np.append([pause_ticks],flat)
+        return flat

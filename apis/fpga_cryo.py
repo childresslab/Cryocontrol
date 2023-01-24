@@ -120,8 +120,10 @@ class CryoFPGA(fb.NiFPGA):
     def set_dio_array(self, dio_array:list[int], write:bool=True) -> None:
         if len(dio_array) != len(self._dio_array):
             raise FPGAValueError("Invalid length of dio_array")
+        self._dio_array = dio_array
         if write:
             self.write_values_to_fpga()
+
     def get_dio_array(self) -> list[int]:
         return self._dio_array
 
@@ -168,7 +170,7 @@ class CryoFPGA(fb.NiFPGA):
         for step in pulse_pattern:
             self._duration += step['duration'] * 1E-3
 
-        fifo_data = pulser.parse_sequence(pulse_pattern)
+        fifo_data = pulser.parse_sequence(pulse_pattern,default_dio=self.get_dio_array())
         self.pulse_fifo_data = fifo_data
 
     def write_pulse_pattern(self) -> None:
