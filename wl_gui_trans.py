@@ -44,7 +44,7 @@ def toggle_spectrometer(sender,value,user_data):
         except Exception as err:
             print("Failed to open connection to spectrometer.")
         dpg.set_value("sp_warn", "Please wait for spectrometer to cool down.")
-        dpg.set_value("Spectrometer/Status", "Cooling")
+        wl_tree["Spectrometer/Status"] = "Cooling"
         with dpg.group(horizontal=True,parent="sp_warning"):
             dpg.add_input_float(label="Temperature",tag="spec_temp",step=0,readonly=True)
 
@@ -58,15 +58,15 @@ def toggle_spectrometer(sender,value,user_data):
         dpg.hide_item('sp_load')
         dpg.delete_item('sp_warning')
         set_spectrometer_exp()
-        dpg.set_value("Spectrometer/Status", "Cold")
+        wl_tree["Spectrometer/Status"] = "Cold"
         dpg.set_exit_callback(lambda _: devices['spect'].close if devices['spect'] is not None else None)
 
     else:
-        dpg.set_value("Spectrometer/Status", "Warming")
+        wl_tree["Spectrometer/Status"] = "Warming"
         devices['spect'].stop_cooling()
         devices['spect'].close()
         devices['spect'] = None
-        dpg.set_value("Spectrometer/Status", "Unitialized")
+        wl_tree["Spectrometer/Status"] = "Unitialized"
 
 def set_spectrometer_exp(*args):
     wl_tree.save()
@@ -238,7 +238,7 @@ def set_prominence(sender,value,data):
         if value < 0:
             dpg.set_value("prominence_line",0.0)
             value = 0.0
-        dpg.set_value("Fitting/Prominence", value)
+        wl_tree["Fitting/Prominence"] = value
     elif sender == "Fitting/Prominence":
         dpg.set_value("prominence_line",dpg.get_value(sender))
     set_fitter()
@@ -254,7 +254,7 @@ def set_minmax(sender,value,data):
         if value < minval:
             dpg.set_value("max_line",minval)
             value = minval
-        dpg.set_value("Fitting/Max Wavelength", value)
+        wl_tree["Fitting/Max Wavelength"] = value
     if sender == "min_line":
         value = dpg.get_value(sender)
         minval = dpg.get_item_configuration("Fitting/Min Wavelength")['min_value']
@@ -265,18 +265,18 @@ def set_minmax(sender,value,data):
         if value < minval:
             dpg.set_value("min_line",minval)
             value = minval
-        dpg.set_value("Fitting/Min Wavelength", value)
+        wl_tree["Fitting/Min Wavelength"] = value
     elif sender == "Fitting/Min Wavelength":
         maxval = dpg.get_value("Fitting/Max Wavelength")-1
         if value > maxval:
             value = maxval
-        dpg.set_value("Fitting/Min Wavelength",value)
+        wl_tree["Fitting/Min Wavelength"] = value
         dpg.set_value("min_line",value)
     elif sender == "Fitting/Max Wavelength":
         minval = dpg.get_value("Fitting/Min Wavelength")+1
         if value < minval:
             value = minval
-        dpg.set_value("Fitting/Max Wavelength",value)
+        wl_tree["Fitting/Max Wavelength"] = value
         dpg.set_value("max_line",value)
     refit()
 

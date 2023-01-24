@@ -5,6 +5,7 @@ from apis import rdpg
 
 from pathlib import Path
 
+from typing import Union
 import datetime as dt
 import logging
 log = logging.getLogger(__name__)
@@ -50,18 +51,18 @@ class GalvoInterface(Interface):
         self.plot.set_cursor(galvo_position)
         self.guess_galvo_time()
 
-
-
-    def set_controls(self,state:bool,ignore:str=None) -> None:
+    def set_controls(self,state:bool,ignore:Union[list[str],str]) -> None:
+        if isinstance(ignore,str):
+            ignore = [ignore]
         if state:
             for control in self.controls:
-                if control != ignore:
+                if control not in ignore:
                     log.debug(f"Enabling {control}")
                     dpg.enable_item(control)
             self.plot.enable_cursor()
         else:
             for control in self.controls:
-                if control != ignore:
+                if control not in ignore:
                     log.debug(f"Disabling {control}")
                     dpg.disable_item(control)
             self.plot.disable_cursor()

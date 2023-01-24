@@ -19,7 +19,9 @@ class Interface():
 
     def initialize(self) -> None:
         raise NotImplementedError("This should be overloaded.")
-
+    
+    # Keep in mind that some interfaces may overwrite this function.
+    # So any changes here may need to be coppied there.
     def set_params(self,state:bool) -> None:
         if state:
             for param in self.params:
@@ -30,6 +32,8 @@ class Interface():
                 log.debug(f"Disabling {param}")
                 dpg.disable_item(param)
 
+    # Keep in mind that some interfaces may overwrite this function.
+    # So any changes here may need to be coppied there.
     def set_controls(self,state:bool,ignore:Union[list[str],str]=None) -> None:
         if isinstance(ignore,str):
             ignore = [ignore]

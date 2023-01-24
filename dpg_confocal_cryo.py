@@ -64,7 +64,7 @@ def set_interfaces(caller:str,state:bool,control:Union[list[str],str]=None,ignor
     state : bool
         True to enable the controls/parameters false to disable them.
     control : Union[list[str],str], optional
-        The string tag of a control whose state shouldn't be altered useful
+        The string tag of a control whose state shouldn't be altered. Useful
         for skipping the control that is currently running so it can be disabled, 
         by default None
     ignore : Union[list[str],str], optinal
@@ -84,15 +84,15 @@ def set_interfaces(caller:str,state:bool,control:Union[list[str],str]=None,ignor
     elif control is None:
         control = []
         
-    log.debug(f"{caller} is setting interfaces {state}.")
+    log.debug(f"{caller} is setting interfaces {state}. Except {ignore}")
     if caller not in interfaces.keys() and caller is not None:
         raise ValueError(f"{caller} not in dict of interfaces: {list(interfaces.keys())}")
     for name,interface in interfaces.items():
         if name not in ignore:
             if state:
-                log.debug(f"Enabling {name} controls.")
+                log.debug(f"Enabling {name} controls. Except {control}.")
             else:
-                log.debug(f"Disabling {name} controls.")
+                log.debug(f"Disabling {name} controls. Except {control}.")
             interface.set_controls(state,control)
     if caller is not None:
         interfaces[caller].set_params(state)
