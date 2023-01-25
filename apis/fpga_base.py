@@ -211,34 +211,6 @@ class NiFPGA():
             raise
 
         return volts
-        """try:
-        self._fpga.registers['Start FPGA 1'].write(0)
-        self._fpga.registers[self._x_channel].write(_volts_to_bits(x))
-        self._fpga.registers[self._y_channel].write(_volts_to_bits(y))
-        try:
-            #self._fpga.fifos[self._counts_fifo].stop()
-            self._fpga.fifos[self._pulse_pattern_fifo].stop()
-            self._fpga.fifos[self._pulse_pattern_fifo].write(self._move_pattern,5000)
-        except:
-            print("Timed out while writing pulse pattern to FPGA")
-            raise
-
-        # Query fpga status until it's done pulsing and counting.
-        self._fpga.registers['Start FPGA 1'].write(1)
-        for i in range(20): # Limit to 20 loops
-            if not self._fpga.registers['Start FPGA 1'].read():
-                break
-            else:
-                time.sleep(0.5/self._clock_frequency)
-        else: # This only runs if for loop finishes without break
-            raise TimeoutError
-
-        except:
-        print("Could not set position on fpga device")
-        raise
-        return -1
-
-        return 0"""
                         ##################
                         #                #
                         #    AI Methods  #
@@ -256,44 +228,11 @@ class NiFPGA():
 
         return volts
 
-                        ##################
-                        #                #
-                        #   DIO Methods  #
-                        #                #
-################################################################################
-    def get_DIO_state(self, chns=None):
-        if chns is None:
-            chns = list(range(self._n_DIO))
-        try:
-            states = [self._fpga.registers[f"DIO{chn}"].read() for chn in chns]
-        except:
-            raise
-
-        return states
-
-    def set_DIO_state(self,channels,state):
-        pass
-
-    def toggle_DIO_state(self, channels, state):
-        states = self.get_DIO_state(channels)
-        on_channels = channels[np.where(states)]
-        off_channels = channels[np.where(np.invert(states))]
-
-        retvalon  = self.enable_DIO(on_channels)
-        retvaloff = self.disable_DIO(off_channels)
-
-        if retvalon != 0:
-            return retvalon
-        elif retvaloff != 0:
-            return retvaloff
-        else:
-            return 0
-
-    def enable_DIO(self, channels):
-        return self.set_DIO_state(self,channels,True)
-
-    def disable_DIO(self,channels):
-        return self.set_DIO_state(self,channels,False)
+                        ###################
+                        #                 #
+                        #  Close Systems  #
+                        #                 #
+#########################################################
 
     def close_fpga(self):
         """ Closes the fpga and cleans up afterwards.
