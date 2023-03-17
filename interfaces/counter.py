@@ -117,7 +117,7 @@ class CounterInterface(Interface):
         log.debug(f"Got count rate of {count}.")
         if self.tree["Counts/Plot Scan Counts"] or dpg.get_value("count"):
             self.data['counts'].append(count)
-            self.data['AI1'].append(self.fpga.get_AI_volts([1])[0])
+            self.data['AI1'].append(self.fpga.get_photodiode())
             self.data['time'].append(datetime.now().timestamp())
         return count
 

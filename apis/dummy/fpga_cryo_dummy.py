@@ -112,13 +112,15 @@ class DummyCryoFPGA(fb.DummyNiFPGA):
                 if v is None:
                     volts[i] = current[i]
         self.set_AO_volts([self._red_aom, self._green_aom], volts)
+        # Dummy saturation - fake PD voltage
+        self._fpga.registers['AI1'].write(fb._volts_to_bits(-volts[1]*(volts[1]-40)/40,self._vmax,self._bit_depth))
         if write:
             self.write_values_to_fpga()
     def get_aoms(self) -> list[float]:
-        return self.set_AO_volts([self._red_aom, self._green_aom])
+        return self.get_AO_volts([self._red_aom, self._green_aom])
 
     def get_photodiode(self) -> float:
-        return self.get_AI_volts(self._photodiode_in)
+        return self.get_AI_volts([self._photodiode_in])[0]
 
     def set_dio_array(self, dio_array:list[int], write:bool=True) -> None:
         if len(dio_array) != len(self._dio_array):
