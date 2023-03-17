@@ -99,6 +99,8 @@ class DummyFIFO():
                  _multi_gaussian(zpos,self._z_positions,self._z_sigmas) *
                  _multi_gaussian(zcav,self._cav_positions,self._cav_sigmas))
         value += np.random.poisson(np.sum(self._amplitudes*values) * self.fpga.count_time)
+        pd = self.fpga.get_photodiode()
+        value *= pd/(pd+3.75)
         data = DummyData(np.tile(value,n))
         dtime = (self.fpga.wait_after_ao + self.fpga.count_time)
         if dtime > 10:

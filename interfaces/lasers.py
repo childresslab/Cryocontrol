@@ -83,14 +83,16 @@ class LaserInterface(Interface):
     # 532 Functions
     def toggle_532(self, *args):
         if args[1]:
-            self.fpga.set_dio_array([1]+[0]*13,write=True)
-            self.tree['532/AOM V'] = self.fpga.get_aoms[1]
+            temp_dio = self.fpga.get_dio_array()
+            temp_dio[0] = 1
+            self.fpga.set_dio_array(temp_dio,write=True)
+            self.tree['532/AOM V'] = self.fpga.get_aoms()[1]
         else:
             self.fpga.set_dio_array([0]*14,write=True)
 
     def set_532(self,*args):
         value = args[1]
-        self.fpga.set_aom(green=value,write=True)
+        self.fpga.set_aoms(green=value,write=True)
 
     # 602 Functions
     def init_toptica(self,*args):

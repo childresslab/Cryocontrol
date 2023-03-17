@@ -115,7 +115,7 @@ class CryoFPGA(fb.NiFPGA):
         return self.set_AO_volts([self._red_aom, self._green_aom])
 
     def get_photodiode(self) -> float:
-        return self.get_AI_volts(self._photodiode_in)
+        return self.get_AI_volts([self._photodiode_in])[0]
 
     def set_dio_array(self, dio_array:list[int], write:bool=True) -> None:
         if len(dio_array) != len(self._dio_array):
@@ -231,6 +231,3 @@ class CryoFPGA(fb.NiFPGA):
             return self.read_fifo(self._counts_fifo)/self.count_time
         else:
             return self.read_fifo(self._counts_fifo)/1.0
-
-
-    

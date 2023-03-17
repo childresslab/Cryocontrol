@@ -39,7 +39,7 @@ class PiezoInterface(Interface):
                                 pz_config['vmin'], pz_config['vmax'])
 
         self.jpe_xy_scan = Scanner(self.set_xy_and_count,[0,0],[1,1],[50,50],[1],[],float,['y','x'],default_result=-1)
-        self.jpe_cav_scan = Scanner(self.set_cav_and_count,[0],[1],[50],[],[],float,['z'],default_result=-1)
+        self.cav_scan = Scanner(self.set_cav_and_count,[0],[1],[50],[],[],float,['z'],default_result=-1)
         self.jpe_3D_scan = Scanner(self.set_xy_get_cav,[0,0],[1,1],[50,50],[1],[],object,['y','x'],default_result=np.array([-1]))
         self.plot = mvHistPlot("Piezo Scan",True,None,True,True,1000,0,300,1000,'viridis',True,1,1E12,50,50)
         self.plot.cursor_callback=self.xy_cursor_callback
@@ -168,23 +168,23 @@ class PiezoInterface(Interface):
                                     default="Delta",
                                     callback=self.update_pzt_plot)
             with dpg.child_window(width=0,height=0,autosize_y=True):
-                    with dpg.group():
-                        self.plot.parent = dpg.last_item()
-                        self.plot.height = -330
-                        self.plot.scale_width = 335
-                        self.plot.make_gui()
-                        with dpg.child_window(width=-0,height=320):
-                            with dpg.plot(label="Cavity Scan",width=-1,height=300,tag="cav_plot"):
-                                dpg.bind_font("plot_font") 
-                                # REQUIRED: create x and y axes
-                                dpg.add_plot_axis(dpg.mvXAxis, label="x", tag="cav_count_x")
-                                dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="cav_count_y")
-                                dpg.add_line_series([0],
-                                                    [0],
-                                                    parent='cav_count_y',label='counts', tag='cav_counts')
-                                dpg.add_drag_line(tag="cav_count_cut",parent='cav_plot',default_value=0,
-                                                    callback=self.update_pzt_plot)
-                                dpg.add_plot_legend()
+                with dpg.group():
+                    self.plot.parent = dpg.last_item()
+                    self.plot.height = -330
+                    self.plot.scale_width = 335
+                    self.plot.make_gui()
+                    with dpg.child_window(width=-0,height=320):
+                        with dpg.plot(label="Cavity Scan",width=-1,height=300,tag="cav_plot"):
+                            dpg.bind_font("plot_font") 
+                            # REQUIRED: create x and y axes
+                            dpg.add_plot_axis(dpg.mvXAxis, label="x", tag="cav_count_x")
+                            dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="cav_count_y")
+                            dpg.add_line_series([0],
+                                                [0],
+                                                parent='cav_count_y',label='counts', tag='cav_counts')
+                            dpg.add_drag_line(tag="cav_count_cut",parent='cav_plot',default_value=0,
+                                                callback=self.update_pzt_plot)
+                            dpg.add_plot_legend()
         self.gui_exists = True
 
     def set_cav_and_count(self,z):
@@ -212,7 +212,7 @@ class PiezoInterface(Interface):
         def init():
             self.fpga.set_ao_wait(self.tree["Scan/Cavity/Wait Time (ms)"],write=False)
             log.debug("Starting cav scan sub.")
-            pos = self.jpe_cav_scan._get_positions()
+            pos = self.cav_scan._get_positions()
             xmin = np.min(pos[0])
             xmax = np.max(pos[0])
             self.position_register["temp_cav_position"] = self.fpga.get_cavity()
@@ -246,11 +246,11 @@ class PiezoInterface(Interface):
             self.set_cav_pos(*self.position_register["temp_cav_position"])
             self.fpga.set_ao_wait(self.tree["Scan/JPE/Wait Time (ms)"],write=False)
 
-        self.jpe_cav_scan._init_func = init
-        self.jpe_cav_scan._abort_func = abort
-        self.jpe_cav_scan._prog_func = prog
-        self.jpe_cav_scan._finish_func = finish
-        return self.jpe_cav_scan.run_async()
+        self.cav_scan._init_func = init
+        self.cav_scan._abort_func = abort
+        self.cav_scan._prog_func = prog
+        self.cav_scan._finish_func = finish
+        return self.cav_scan.run_async()
 
     def set_xy_get_cav(self,y,x):
         try:
@@ -258,7 +258,7 @@ class PiezoInterface(Interface):
             self.do_cav_scan_step().join()
         except FPGAValueError:
             return np.array([-1])
-        return self.jpe_cav_scan.results
+        return self.cav_scan.results
 
     def start_xy_scan(self):
         if not dpg.get_value("pzt_xy_scan"):
@@ -337,14 +337,14 @@ class PiezoInterface(Interface):
         steps = self.tree["Scan/Cavity/Steps"]
         centers = self.tree["Scan/Cavity/Center"]
         spans = self.tree["Scan/Cavity/Span"]
-        self.jpe_cav_scan.steps = [steps]
-        self.jpe_cav_scan.centers = [centers]
-        self.jpe_cav_scan.spans = [spans]
+        self.cav_scan.steps = [steps]
+        self.cav_scan.centers = [centers]
+        self.cav_scan.spans = [spans]
         cav_data = {}
 
         def init():
             self.fpga.set_ao_wait(self.tree["Scan/Cavity/Wait Time (ms)"],write=False)
-            pos = self.jpe_cav_scan._get_positions()
+            pos = self.cav_scan._get_positions()
             cav_data['counts'] = []
             cav_data['pos'] = []
             xmin = np.min(pos[0])
@@ -389,11 +389,11 @@ class PiezoInterface(Interface):
                 self.save_cav_scan()
             self.fpga.set_ao_wait(self.counter.tree["Counts/Wait Time (ms)"],write=False)
 
-        self.jpe_cav_scan._init_func = init
-        self.jpe_cav_scan._abort_func = abort
-        self.jpe_cav_scan._prog_func = prog
-        self.jpe_cav_scan._finish_func = finish
-        return self.jpe_cav_scan.run_async()
+        self.cav_scan._init_func = init
+        self.cav_scan._abort_func = abort
+        self.cav_scan._prog_func = prog
+        self.cav_scan._finish_func = finish
+        return self.cav_scan.run_async()
 
     def get_cav_range(self):
         if dpg.is_plot_queried("cav_plot"):
@@ -441,9 +441,9 @@ class PiezoInterface(Interface):
         steps = self.tree["Scan/Cavity/Steps"]
         centers = self.tree["Scan/Cavity/Center"]
         spans = self.tree["Scan/Cavity/Span"]
-        self.jpe_cav_scan.steps = [steps]
-        self.jpe_cav_scan.centers = [centers]
-        self.jpe_cav_scan.spans = [spans]
+        self.cav_scan.steps = [steps]
+        self.cav_scan.centers = [centers]
+        self.cav_scan.spans = [spans]
 
         def init():
             self.fpga.set_ao_wait(self.tree["Scan/JPE/Wait Time (ms)"],write=False)
@@ -511,11 +511,11 @@ class PiezoInterface(Interface):
         self.plot.update_plot(plot_data)
         if sender == "cav_count_cut":
             volts = dpg.get_value("cav_count_cut")
-            index = np.argmin(np.abs(self.jpe_cav_scan.positions[0]-volts))
+            index = np.argmin(np.abs(self.cav_scan.positions[0]-volts))
             self.tree['Plot/3D/Slice Index'] = int(index)
         if sender == f"{self.treefix}_Plot/3D/Slice Index":
             index = app_data
-            volts = self.jpe_cav_scan.positions[0][index]
+            volts = self.cav_scan.positions[0][index]
             dpg.set_value("cav_count_cut",volts)
 
     def guess_cav_time(self):
@@ -724,9 +724,9 @@ class PiezoInterface(Interface):
         path /= filename
         as_npz = not (".csv" in filename)
         header = self.jpe_3D_scan.gen_header("3D Piezo Scan")
-        header += f"cavity center, {repr(self.jpe_cav_scan.centers)}\n"
-        header += f"cavity spans, {repr(self.jpe_cav_scan.spans)}\n"
-        header += f"cavity steps, {repr(self.jpe_cav_scan.steps)}\n"
+        header += f"cavity center, {repr(self.cav_scan.centers)}\n"
+        header += f"cavity spans, {repr(self.cav_scan.spans)}\n"
+        header += f"cavity steps, {repr(self.cav_scan.steps)}\n"
 
         self.jpe_3D_scan.save_results(str(path),as_npz=as_npz,header=header)
 
@@ -735,5 +735,5 @@ class PiezoInterface(Interface):
         filename = dpg.get_value("save_pzt_file")
         path /= filename
         as_npz = not (".csv" in filename)
-        header = self.jpe_cav_scan.gen_header("Cavity Piezo Scan")
-        self.jpe_cav_scan.save_results(str(path),as_npz=as_npz,header=header)
+        header = self.cav_scan.gen_header("Cavity Piezo Scan")
+        self.cav_scan.save_results(str(path),as_npz=as_npz,header=header)

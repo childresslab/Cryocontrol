@@ -8,6 +8,7 @@ from interfaces.piezos import PiezoInterface
 from interfaces.piezo_optimizer import PiezoOptInterface
 from interfaces.picoharp import PicoHarpInterface
 from interfaces.lasers import LaserInterface
+from interfaces.saturation_scans import SaturationInterface
 
 from threading import Thread
 
@@ -147,6 +148,10 @@ interfaces["pzt"] = pzt
 pzt_opt = PiezoOptInterface(set_interfaces,fpga,pzt,counter)
 interfaces["pzt_opt"] = pzt_opt
 
+# Setup Saturation Scans
+saturation = SaturationInterface(set_interfaces,fpga,counter,pzt)
+interfaces['saturation'] = saturation
+
 # Setup Picoharp
 pico = PicoHarpInterface(set_interfaces, harp)
 interfaces['pico'] = pico
@@ -249,6 +254,9 @@ with dpg.window(label="Cryocontrol", tag='main_window'):
         #################
         with dpg.tab(label="Piezo Optimizer"):
             pzt_opt.makeGUI(dpg.last_item())
+        
+        with dpg.tab(label="Saturation"):
+            saturation.makeGUI(dpg.last_item())
 
         with dpg.tab(label="Picoharp"):
             pico.makeGUI(dpg.last_item())

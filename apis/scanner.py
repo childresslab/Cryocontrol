@@ -206,6 +206,8 @@ class Scanner():
         self._default_result = default_result
         self._has_run = False
 
+        self.results = None
+
         self._positions = self._get_positions()
 
     def _get_positions(self):
@@ -433,7 +435,8 @@ class Scanner():
             The results of running the sweep function at each position.
         """
         Imax = np.prod(self._steps)
-        results = np.ones(self._steps, dtype=self._dtype) * self._default_result
+        results = np.full(self._steps, None, dtype=self._dtype)
+        results.fill(self._default_result)
         self.results = results
         self._has_run = True
         positions, indices = self.generate_scan_positions()
