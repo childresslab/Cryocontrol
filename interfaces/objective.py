@@ -118,19 +118,20 @@ class ObjectiveInterface(Interface):
                         self.obj_plot.scale_width = 335
                         self.obj_plot.make_gui()
                         with dpg.child_window(width=-0,height=320):
-                            with dpg.plot(label="Count Rate",width=-1,height=300,tag="count_plot3"):
+                            with dpg.plot(label="Count Rate",width=-1,height=300,tag="count_plot3",
+                                          use_local_time=True,use_ISO8601=True):
                                 dpg.bind_font("plot_font") 
                                 # REQUIRED: create x and y axes
                                 dpg.add_plot_axis(dpg.mvXAxis, label="x", time=True, tag="count_x3")
                                 dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="count_y3")
                                 dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="count_AI13",no_gridlines=True)
-                                dpg.add_line_series(rdpg.offset_timezone(self.counter.data['time']),
+                                dpg.add_line_series(self.counter.data['time'],
                                                     self.counter.data['counts'],
                                                     parent='count_y3',label='counts', tag='counts_series3')
-                                dpg.add_line_series(rdpg.offset_timezone(self.counter.data['time']),
+                                dpg.add_line_series(self.counter.data['time'],
                                                     self.counter.data['counts'],
                                                     parent='count_y3',label='avg. counts', tag='avg_counts_series3')
-                                dpg.add_line_series(rdpg.offset_timezone(self.counter.data['time']),
+                                dpg.add_line_series(self.counter.data['time'],
                                                     self.counter.data['AI1'],
                                                     parent='count_AI13',label='AI1', tag='AI1_series3')
                                 dpg.set_item_source('counts_series3','counts_series')

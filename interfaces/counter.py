@@ -71,19 +71,20 @@ class CounterInterface(Interface):
                               tooltip="Wether to plot counts acquired during other scanning procedures.")
                 self.tree.add("Counts/Show AI1", True, callback=self.toggle_AI)
             with dpg.child_window(width=-1,autosize_y=True):
-                with dpg.plot(label="Count Rate",width=-1,height=-1,tag="count_plot"):
+                with dpg.plot(label="Count Rate",width=-1,height=-1,tag="count_plot",
+                              use_local_time=True,use_ISO8601=True):
                     dpg.bind_font("plot_font") 
                     # REQUIRED: create x and y axes
                     dpg.add_plot_axis(dpg.mvXAxis, label="Time", time=True, tag="count_x")
                     dpg.add_plot_axis(dpg.mvYAxis, label="Counts",tag="count_y")
                     dpg.add_plot_axis(dpg.mvYAxis,label="Sync", tag="count_AI1",no_gridlines=True)
-                    dpg.add_line_series(rdpg.offset_timezone(self.data['time']),
+                    dpg.add_line_series(self.data['time'],
                                         self.data['counts'],
                                         parent='count_y',label='counts', tag='counts_series')
-                    dpg.add_line_series(rdpg.offset_timezone(self.data['time']),
+                    dpg.add_line_series(self.data['time'],
                                         self.data['counts'],
                                         parent='count_y',label='avg. counts', tag='avg_counts_series')
-                    dpg.add_line_series(rdpg.offset_timezone(self.data['time']),
+                    dpg.add_line_series(self.data['time'],
                                         self.data['AI1'],
                                         parent='count_AI1',label='AI1', tag='AI1_series')
                     dpg.add_plot_legend()
@@ -167,9 +168,9 @@ class CounterInterface(Interface):
                                              min(len(self.data['time']),
                                              self.tree["Counts/Average Points"]))
         # Update all the copies of the count plots.
-        dpg.set_value('counts_series',[rdpg.offset_timezone(self.data['time']),self.data['counts']])
-        dpg.set_value('avg_counts_series',[rdpg.offset_timezone(avg_time),avg_counts])
-        dpg.set_value('AI1_series',[rdpg.offset_timezone(self.data['time']),self.data['AI1']])
+        dpg.set_value('counts_series',[self.data['time'],self.data['counts']])
+        dpg.set_value('avg_counts_series',[avg_time,avg_counts])
+        dpg.set_value('AI1_series',[self.data['time'],self.data['AI1']])
 
     # Encapsulated
     def draw_count(self,val):

@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 from ast import literal_eval
+from warnings import warn
 
 import logging
 log = logging.getLogger(__name__)
@@ -251,7 +252,11 @@ class TreeDict():
 # So we can subtract off the timezone differece before plotting.
 # This should only be called when displaying the data in a plot, not for
 # saving the actual time stamps.
+
+# Deprecated since DPG 1.9.0 with the addition of the use_local_time flag
+# in dpg.add_plot()
 def offset_timezone(timestamps:list[float]) -> list[float]:
+    warn("Deprecated since DPG 1.9.0", DeprecationWarning,stacklevel=2)
     now = dt.now().timestamp()
     offset = (dt.utcfromtimestamp(now) - dt.fromtimestamp(now)).seconds
     return list(np.array(timestamps) - offset)

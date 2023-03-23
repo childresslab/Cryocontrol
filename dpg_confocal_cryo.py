@@ -14,8 +14,11 @@ from threading import Thread
 
 from typing import Union
 
+from packaging import version
 import apis.rdpg as rdpg
 dpg = rdpg.dpg
+if version.parse(dpg.__version__) < version.parse('1.9.0'):
+    raise ImportError(f'Dearpygui >= 1.9.0 required, you have {dpg.__version__}. ')
 
 import logging
 import json

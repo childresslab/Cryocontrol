@@ -140,15 +140,17 @@ class PicoHarpInterface(Interface):
                         dpg.add_plot_legend(location=dpg.mvPlot_Location_NorthEast)
 
                 with dpg.child_window(width=-0,height=300):
-                    with dpg.plot(label="Count Rate",width=-1,height=280,tag="pico_count_plot"):
+                    with dpg.plot(label="Count Rate",width=-1,height=280,
+                                  tag="pico_count_plot",
+                                  use_local_time=True,use_ISO8601=True):
                         dpg.bind_font("plot_font") 
                         # REQUIRED: create x and y axes
                         dpg.add_plot_axis(dpg.mvXAxis, label="x", time=True, tag="rate_x")
                         dpg.add_plot_axis(dpg.mvYAxis, label="y",tag="rate_y")
-                        dpg.add_line_series(rdpg.offset_timezone(self.rate_data['time1']),
+                        dpg.add_line_series(self.rate_data['time1'],
                                             self.rate_data['chn1_rate'],
                                             parent='rate_y',label='chn1', tag='chn1_rate_plot')
-                        dpg.add_line_series(rdpg.offset_timezone(self.rate_data['time2']),
+                        dpg.add_line_series(self.rate_data['time2'],
                                             self.rate_data['chn2_rate'],
                                             parent='rate_y',label='chn2', tag='chn2_rate_plot')
                         dpg.bind_item_theme("chn1_rate_plot","plot_theme_blue")
@@ -255,7 +257,7 @@ class PicoHarpInterface(Interface):
                     except IndexError:
                         break
                 dpg.set_value('chn1_rate_plot',
-                              [rdpg.offset_timezone(self.rate_data['time1']),
+                              [self.rate_data['time1'],
                               self.rate_data['chn1_rate']])
                 dpg.show_item('chn1_rate_plot')
 
@@ -272,7 +274,7 @@ class PicoHarpInterface(Interface):
                     except IndexError:
                         break
                 dpg.set_value('chn2_rate_plot',
-                              [rdpg.offset_timezone(self.rate_data['time2']),
+                              [self.rate_data['time2'],
                               self.rate_data['chn2_rate']])
                 dpg.show_item('chn2_rate_plot')
 
@@ -330,10 +332,10 @@ class PicoHarpInterface(Interface):
                           'time2' : [], 
                           'chn2_rate' : []}
         dpg.set_value('chn1_rate_plot',
-                      [rdpg.offset_timezone(self.rate_data['time1']),
+                      [self.rate_data['time1'],
                       self.rate_data['chn1_rate']])
         dpg.set_value('chn2_rate_plot',
-                      [rdpg.offset_timezone(self.rate_data['time2']),
+                      [self.rate_data['time2'],
                       self.rate_data['chn2_rate']])
 
 def _strip_trailing_zeros(times,data):
