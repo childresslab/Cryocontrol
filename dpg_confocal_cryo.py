@@ -28,11 +28,11 @@ log = logging.getLogger(__name__)
 
 # Use the current repo name to check if we should                                                                              
 from git import Repo
-repo_name = Repo('./').name
+repo_name = Repo('./').active_branch.name
 if repo_name == "main":
     with open("./app_config_main.json",'r') as f:
         config = json.load(f)
-if repo_name == "debug":
+if repo_name == "dummy_dev":
     with open("./app_config_debug.json",'r') as f:
         config = json.load(f)
 
