@@ -15,10 +15,11 @@ from threading import Thread
 from typing import Union
 
 from packaging import version
+import dearpygui
+if version.parse(dearpygui.__version__) < version.parse('1.9.0'):
+    raise ImportError(f'Dearpygui >= 1.9.0 required, you have {dpg.__version__}. ')
 import apis.rdpg as rdpg
 dpg = rdpg.dpg
-if version.parse(dpg.__version__) < version.parse('1.9.0'):
-    raise ImportError(f'Dearpygui >= 1.9.0 required, you have {dpg.__version__}. ')
 
 import logging
 import json
@@ -276,7 +277,8 @@ for interface in interfaces.values():
 
 # Make the main window take up the whole page.
 dpg.set_primary_window('main_window',True)
-
+# dpg.show_style_editor()
+dpg.show_metrics()
 # Start the application.
 # Running this in a seperate thread should be okay and allow for terminal control
 # However, this may cause issues on macOS if you're trying to develope from there.

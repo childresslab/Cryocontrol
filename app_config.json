@@ -1,4 +1,4 @@
 {
-    "dummy" : false,
-    "data_folder" : "X:\\DiamondCloud\\Cryostat setup\\Data"
+    "dummy" : true,
+    "data_folder" : "C:\\Users\\ry\\Documents\\git\\cryocontrol\\test_data"
 }

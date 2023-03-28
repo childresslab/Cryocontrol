@@ -36,13 +36,13 @@ log.addHandler(fh)
 stp_config = {"z_min" : -5750.0,            # um
               "z_max" : -250.0,             # um
               "um_per_click" : 5/17,        # um/Click (250um per rev, 850 clicks per rev.)
-              "R": 26.0,                    # mm
-              "h": 58.9,                    # mm
+              "R": 26.0,                    # Actuator Radius - Stage Dependent (mm)
+              "h": 58.9,                    # Sample Pedestal Height - Stage Dependent(mm)
               "gain" : 200.0,               # Freq/Error i.e. Hz/Tick
               "stuck_iterations" : 100,     # Integer
               "T" : 10,                     # K
-              "z_res" : 0.3,                # um
-              "xy_res" : 0.8,               # um
+              "z_res" : 0.3,                # um/click
+              "xy_res" : 0.8,               # um/click
               "z_rel_lim" : 1.0,            # um
               "z_lim" : [-4520,-3560],      # um
               "xy_rel_lim" : 5.0,           # um
@@ -566,9 +566,7 @@ class JPEStepper():
         """Wrapper for setting the z_clicks with the appropriate offset
         to account for mismatches between controller clicks and known position.
         Essentially any command that moves the stages should absolutely use this
-        command for proper position tracking.
-
-        Otherwise, unexpected offsets may occur.
+        command for proper position tracking. Otherwise, unexpected offsets may occur.
 
         Parameters
         ----------
@@ -613,6 +611,10 @@ class JPEStepper():
             the motion only applicable if monitor=True, by default True
         monitor_kwargs : dict, optional
             Extra keywords to pass to the monitor function.
+        dry_run : bool, optional
+            If true, will run through the calculations of the stage motion
+            without actually moving the stage or writing to the position 
+            file. By default False.
         """
         prefix = ""
         if dry_run:
@@ -1263,7 +1265,7 @@ class JPEStepper():
         self._lims = limits
 
     def toggle_zero_xy(self) -> None:
-        """Toggles between zeroin the xy stage position or not.
+        """Toggles between zeroing the xy stage position or not.
         If turning on, we record the current xy position and start
         using that as a position offset, and set the user_set_position to 0
         in both x and y.

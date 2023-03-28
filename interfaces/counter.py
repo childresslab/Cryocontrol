@@ -169,7 +169,7 @@ class CounterInterface(Interface):
                                              self.tree["Counts/Average Points"]))
         # Update all the copies of the count plots.
         dpg.set_value('counts_series',[self.data['time'],self.data['counts']])
-        dpg.set_value('avg_counts_series',[avg_time,avg_counts])
+        dpg.set_value('avg_counts_series',[list(avg_time),list(avg_counts)])
         dpg.set_value('AI1_series',[self.data['time'],self.data['AI1']])
 
     # Encapsulated
