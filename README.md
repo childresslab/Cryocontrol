@@ -30,7 +30,7 @@ e.g. plotting some data nicely, or running fits
 Basically if you want to import some useful functions for doing something, this is where the script
 you're importing from should go.
 
-`tests/` contains files used for testing any other code in the repo. This could should produce no
+`tests/` contains files used for testing any other code in the repo. This should produce no
 real physical side effects, and only confirm that the logic of the code remains correct between
 changes.
 
