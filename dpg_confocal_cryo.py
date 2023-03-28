@@ -25,8 +25,16 @@ import logging
 import json
 
 log = logging.getLogger(__name__)
-with open("./app_config.json",'r') as f:
-    config = json.load(f)
+
+# Use the current repo name to check if we should                                                                              
+from git import Repo
+repo_name = Repo('./').name
+if repo_name == "main":
+    with open("./app_config_main.json",'r') as f:
+        config = json.load(f)
+if repo_name == "debug":
+    with open("./app_config_debug.json",'r') as f:
+        config = json.load(f)
 
 # Setup control, devices should be defined outside interfaces to allow interuse
 if bool(config['dummy']):

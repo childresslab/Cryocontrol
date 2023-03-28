@@ -1,5 +1,6 @@
 # Settings Files
 cryo_gui_settings/
+test_data/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
