@@ -69,7 +69,6 @@ class CounterInterface(Interface):
                               callback=self.plot_counts,
                               tooltip="Wether to plot counts acquired during other scanning procedures.")
                 self.tree.add("Counts/Show AI1", True, callback=self.toggle_AI)
-                dpg.add_input_int(label='TEST INT')
             with dpg.child_window(width=-1,autosize_y=True):
                 with dpg.plot(label="Count Rate",width=-1,height=-1,tag="count_plot",
                               use_local_time=True,use_ISO8601=True):
