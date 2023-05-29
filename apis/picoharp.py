@@ -71,10 +71,10 @@ class PicoHarp():
         self._dll = ct.cdll.LoadLibrary('phlib64.dll') 
         self._init_dll_functions()
 
-        self.times     = np.zeros(HISTCHAN+1,dtype = np.float)
+        self.times     = np.zeros(HISTCHAN+1,dtype = float)
         self.histogram = np.zeros(HISTCHAN,dtype = np.uint)
         self.last_hist = np.zeros(HISTCHAN,dtype = np.uint)
-        self.last_times = np.zeros(HISTCHAN,dtype = np.float)
+        self.last_times = np.zeros(HISTCHAN,dtype = float)
         self.elaps = 0
         self.last_elaps = 0
         self.devidx = None

@@ -26,7 +26,7 @@ import json
 
 log = logging.getLogger(__name__)
 
-# Use the current repo name to check if we should                                                                              
+# Use the current repo name to check if we should be in debug mode or not                                                                       
 from git import Repo
 repo_name = Repo('./').active_branch.name
 if repo_name == "main":
@@ -292,3 +292,5 @@ dpg.show_metrics()
 # However, this may cause issues on macOS if you're trying to develope from there.
 dpg_thread = Thread(target=rdpg.start_dpg)
 dpg_thread.start()
+# If unwanted, simply run:
+# rdpg.start_dpg()

@@ -44,7 +44,6 @@ class CounterInterface(Interface):
         self.tree.load()
         self.toggle_AI(None, self.tree["Counts/Show AI1"], None)
 
-
     def makeGUI(self, parent: Union[str, int]) -> None:
         self.parent = parent
         with dpg.group(parent=parent,horizontal=True):
@@ -70,6 +69,7 @@ class CounterInterface(Interface):
                               callback=self.plot_counts,
                               tooltip="Wether to plot counts acquired during other scanning procedures.")
                 self.tree.add("Counts/Show AI1", True, callback=self.toggle_AI)
+                dpg.add_input_int(label='TEST INT')
             with dpg.child_window(width=-1,autosize_y=True):
                 with dpg.plot(label="Count Rate",width=-1,height=-1,tag="count_plot",
                               use_local_time=True,use_ISO8601=True):
@@ -153,15 +153,14 @@ class CounterInterface(Interface):
         Update the count plots on various pages
         """
         # Truncate the count data down to the desired number of points
-        delta = len(self.data['counts']) - self.tree["Counts/Max Points"]
-        while delta >= 0:
+        if len(self.data['counts']) > self.tree['Counts/Max Points']:
             try:
-                self.data['counts'].pop(0)
-                self.data['AI1'].pop(0)
-                self.data['time'].pop(0)
-                delta -= 1
+                self.data['counts'] = self.data['counts'][-self.tree['Counts/Max Points']:]
+                self.data['AI1'] = self.data['AI1'][-self.tree['Counts/Max Points']:]
+                self.data['time'] = self.data['time'][-self.tree['Counts/Max Points']:]
             except IndexError:
-                break
+                 pass
+
         # Average the time and counts data
         avg_time, avg_counts= average_counts(self.data['time'],
                                              self.data['counts'],
@@ -200,7 +199,7 @@ class CounterInterface(Interface):
     def abort_counts(self):
         """
         Stop the couting with a small sleep time to ensure that the last
-        count opperation exists.
+        count opperation exits.
         This is to be run before any scan starts, making sure to stop the ongoing
         counting. 
         """
@@ -223,16 +222,12 @@ class CounterInterface(Interface):
         self.fpga.set_ao_wait(self.tree["Counts/Wait Time (ms)"],write=False)
         # Function for the new thread to run
         def count_func():
-            # Make a second thread for updating the plot
-            plot_thread = Thread(target=self.plot_counts)
             # As long as we still want to count
             while dpg.get_value("count"):
                 # Get the new count data
                 count = self.get_count(self.tree["Counts/Count Time (ms)"])
-                # If the plot isn't currently being updated update it.
-                if not plot_thread.is_alive():
-                    plot_thread = Thread(target=self.plot_counts)
-                    plot_thread.start()
+                # Threaded plot updater
+                self.plot_counts()
 
         # Start the thread
         count_thread = Thread(target=count_func)
@@ -260,25 +255,25 @@ class CounterInterface(Interface):
 def average_counts(times : NDArray[np.float64],
                    counts : NDArray[np.float64],
                    window : int) -> tuple[NDArray[np.float64],NDArray[np.float64]]:
-        """_summary_
+    """_summary_
 
-        Parameters
-        ----------
-        times : NDArray[np.float64]
-            Time data to be average
-        counts : NDArray[np.float64]
-            Counts data to be averaged
-        window : int
-            Averaging window size
+    Parameters
+    ----------
+    times : NDArray[np.float64]
+        Time data to be average
+    counts : NDArray[np.float64]
+        Counts data to be averaged
+    window : int
+        Averaging window size
 
-        Returns
-        -------
-        tuple[NDArray[np.float64],NDArray[np.float64]]
-            Averaged time and counts data
-        """
-        avg_times = moving_average(times,window)
-        avg_counts = moving_average(counts,window)
-        return avg_times,avg_counts
+    Returns
+    -------
+    tuple[NDArray[np.float64],NDArray[np.float64]]
+        Averaged time and counts data
+    """
+    avg_times = moving_average(times,window)
+    avg_counts = moving_average(counts,window)
+    return avg_times,avg_counts
 
 def moving_average(values:NDArray[np.float64],window:int) -> NDArray[np.float64]:
     """
@@ -299,5 +294,4 @@ def moving_average(values:NDArray[np.float64],window:int) -> NDArray[np.float64]
     NDArray[np.float64]
         The averaged data.
     """
-
     return np.average(sliding_window_view(values, window_shape = window), axis=1)
