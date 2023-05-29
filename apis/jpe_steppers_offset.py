@@ -163,7 +163,7 @@ class JPEStepper():
         if self.initialized:
             self.deinitialize()
     
-    def clicks_to_microns(self, clicks:Union[int,npt.NDArray[np.int]]) -> Union[float, npt.NDArray[float]]:
+    def clicks_to_microns(self, clicks:Union[int,npt.NDArray[np.int]]) -> Union[float, npt.NDArray[np.float64]]:
         """Converts the given number of clicks into microns.
 
         Parameters
@@ -174,7 +174,7 @@ class JPEStepper():
 
         Returns
         -------
-        Union[float, npt.NDArray[float]]
+        Union[float, npt.NDArray[np.float64]]
             If a single number is input, then return the single number of microns.
             Else, returns an array of the converted values.
         """
@@ -184,13 +184,13 @@ class JPEStepper():
 
         return float(clicks * self.um_conv)
 
-    def microns_to_clicks(self, microns:Union[float,npt.NDArray[float]]) -> Union[int, npt.NDArray[np.int]]:
+    def microns_to_clicks(self, microns:Union[float,npt.NDArray[np.float64]]) -> Union[int, npt.NDArray[np.int]]:
         """Converts the given number of microns into clicks, including rounding
            to an integer.
 
         Parameters
         ----------
-        microns : Union[float,npt.NDArray[float]]
+        microns : Union[float,npt.NDArray[np.float64]]
             The amount of microns to be converted to clicks.
             Either a single number or a list of numbers to convert.
 
@@ -207,7 +207,7 @@ class JPEStepper():
         return int(round(microns/self.um_conv))
 
     # User coordinates include position matching offset and toggleable zeroing
-    def user_to_stage(self, user_position:npt.NDArray[float]) -> npt.NDArray[float]:
+    def user_to_stage(self, user_position:npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
         """Converts a position in the easier to use 'user' reference frame
            into the more concrete 'stage' reference frame to which the actuator
            clicks actually correspond to.
@@ -235,7 +235,7 @@ class JPEStepper():
 
     # Stage coordinates is the raw clicks to z position conversion with no convenience
     # offsets.
-    def stage_to_user(self, stage_position:npt.NDArray[float]) -> npt.NDArray[float]:
+    def stage_to_user(self, stage_position:npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
         """Converts a position in the concrete 'stage' reference frame into the
         easier to use 'user' reference frame.
 
@@ -320,7 +320,7 @@ class JPEStepper():
             self.close_pipe()
         self.initialized = False
 
-    def read_pos_file(self) -> Tuple[npt.NDArray[float],npt.NDArray[float],list[bool]]:
+    def read_pos_file(self) -> Tuple[npt.NDArray[np.float64],npt.NDArray[np.float64],list[bool]]:
         """ Read out the previously saved position file for consistency checking.
             This file contains the previous user position, zero offset and what
             axis was zeroed. All of which is returned as two arrays and a list.
@@ -528,7 +528,7 @@ class JPEStepper():
         return raw_clicks        
 
     @property
-    def position(self) -> npt.NDArray[float]:
+    def position(self) -> npt.NDArray[np.float64]:
         """Get the current cartesian position of the stage in the user
         reference frame, converted to microns.
 
@@ -547,7 +547,7 @@ class JPEStepper():
 
     @property
     # Stage position with offset to match initialization, but no zeroing.
-    def abs_position(self) -> npt.NDArray[float]:
+    def abs_position(self) -> npt.NDArray[np.float64]:
         """Get the current cartesian position of the stage in the user
         reference frame, ignoring zeroing, converted to microns.
 
@@ -722,7 +722,7 @@ class JPEStepper():
         # Return the z value.
         return user_pos[2]
     
-    def compensate_z_move(self,new_pos:npt.NDArray[float],
+    def compensate_z_move(self,new_pos:npt.NDArray[np.float64],
                           max_z:float,low_z:float,
                           monitor:bool=False,write_pos:bool=True,
                           monitor_kwargs:dict = {}, dry_run=False) -> None:
@@ -807,8 +807,8 @@ class JPEStepper():
         state = self.get_status()
         return [state[name] for name in ['ERR1','ERR2','ERR3']]
 
-    def enforce_limits(self,new_pos:npt.NDArray[float],
-                            cur_pos:npt.NDArray[float]) -> None:
+    def enforce_limits(self,new_pos:npt.NDArray[np.float64],
+                            cur_pos:npt.NDArray[np.float64]) -> None:
         """Checks the new position compared to the current position and does
         nothing if all the bounds are respected. Otherwise, raises an error.
         There are three types of bounds to follow. Relative bounds set by
@@ -821,9 +821,9 @@ class JPEStepper():
 
         Parameters
         ----------
-        new_pos : npt.NDArray[float]
+        new_pos : npt.NDArray[np.float64]
             The position we would like to move to, in the user reference frame.
-        cur_pos : npt.NDArray[float]
+        cur_pos : npt.NDArray[np.float64]
             The current user set position.
 
         Raises
@@ -1196,7 +1196,7 @@ class JPEStepper():
         log.info("Set Gain = 60, Temp = 293 for RT operation.")
 
     @property
-    def rel_lims(self) -> npt.NDArray[float]:
+    def rel_lims(self) -> npt.NDArray[np.float64]:
         """Get the relative motion limit for each axis.
 
         Returns
@@ -1207,7 +1207,7 @@ class JPEStepper():
         return self._rel_lims
         
     @rel_lims.setter
-    def rel_lims(self,rel_lims:npt.NDArray[float]) -> None:
+    def rel_lims(self,rel_lims:npt.NDArray[np.float64]) -> None:
         """Set the relative motion limit for each axis.
         Must be greater than zero.
 
@@ -1232,7 +1232,7 @@ class JPEStepper():
         self._rel_lims = rel_lims
 
     @property
-    def lims(self) -> npt.NDArray[float]:
+    def lims(self) -> npt.NDArray[np.float64]:
         """Get the soft bounds on each axis' motion.
 
         Returns
@@ -1242,7 +1242,7 @@ class JPEStepper():
         """
         return self._lims
     @lims.setter
-    def lims(self, limits:npt.NDArray[float]) -> None:
+    def lims(self, limits:npt.NDArray[np.float64]) -> None:
         """Set the soft bounds on each axis' motion.
 
         Parameters
