@@ -27,6 +27,10 @@ class TreeDict():
                         }
         self.prefix = f"{parent}_"
         self.savefile = savename
+        self.save_path = Path(self.savefile)
+        if not self.save_path.exists():
+            self.save_path.parent.mkdir(parents=True, exist_ok=True)
+            self.save_path.touch()
         self.skip_save = []
 
     def __getitem__(self, key):
@@ -71,6 +75,7 @@ class TreeDict():
         # Keep track of which items we don't save
         if not save:
             self.skip_save.append(name)
+
         # Make sure all the nodes needed exist
         layer_dict = self._make_nodes(name,node_kwargs)
         hierarchy = name.split('/')
@@ -102,7 +107,6 @@ class TreeDict():
         else:
             if order > 1:
                 lookup = 'list'
-
 
         if order > 4:
             raise ValueError(f"Number of inputs can't exceed 4. {order = }.")
@@ -191,19 +195,15 @@ class TreeDict():
                     dpg.add_text(tooltip)
 
     def save(self,filemode='w'):
-        with dpg.mutex():
-            path = Path(self.savefile)
-            if not path.exists():
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.touch()
-            values_dict = self.collapse_item_dict(self.dict)
-            with path.open(filemode) as f:
-                for key,value in values_dict.items():
-                    if key not in self.skip_save:
-                        if isinstance(value,str):
-                            f.write(f"{key},'{value}'\n")
-                        else:
-                            f.write(f"{key},{value}\n")
+        path = self.save_path
+        values_dict = self.collapse_item_dict(self.dict)
+        with path.open(filemode) as f:
+            for key,value in values_dict.items():
+                if key not in self.skip_save:
+                    if isinstance(value,str):
+                        f.write(f"{key},'{value}'\n")
+                    else:
+                        f.write(f"{key},{value}\n")
     
     def collapse_item_dict(self, d:dict):
         output = {}
@@ -248,11 +248,6 @@ class TreeDict():
                 self.save()
             return save_cb
 
-# Plot time axes are always in UTC with no way to adjust.
-# So we can subtract off the timezone differece before plotting.
-# This should only be called when displaying the data in a plot, not for
-# saving the actual time stamps.
-
 # Deprecated since DPG 1.9.0 with the addition of the use_local_time flag
 # in dpg.add_plot()
 def offset_timezone(timestamps:list[float]) -> list[float]:
@@ -263,14 +258,14 @@ def offset_timezone(timestamps:list[float]) -> list[float]:
 
 def make_font_registry():
     with dpg.font_registry():
-        dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 12, default_font=False,tag='small_font')
-        dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 18, default_font=True)
-        dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Medium.ttf", 18, default_font=False)
-        dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Regular.ttf", 18, default_font=False)
-        dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 22, default_font=False, tag="plot_font")
-        dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 48, default_font=False,tag="big_font")
-        dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 96, default_font=False,tag="huge_font")
-        dpg.add_font("X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 128, default_font=False,tag="massive_font")
+        dpg.add_font(r"X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 12,tag='small_font')
+        dpg.add_font(r"X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 18)
+        dpg.add_font(r"X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Medium.ttf", 18)
+        dpg.add_font(r"X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Regular.ttf", 18)
+        dpg.add_font(r"X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 22, tag="plot_font")
+        dpg.add_font(r"X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 48,tag="big_font")
+        dpg.add_font(r"X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 96,tag="huge_font")
+        dpg.add_font(r"X:\DiamondCloud\Personal\Rigel\Scripts\FiraCode-Bold.ttf", 128,tag="massive_font")
 
 def make_disabled_theme():
     items = [dpg.mvInputText,
