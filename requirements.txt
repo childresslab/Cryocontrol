@@ -1,5 +1,5 @@
 dearpygui==1.9.0
-GitPython==3.1.31
+GitPython==3.1.41
 lmfit==1.0.3
 matplotlib==3.7.1
 metrolopy==0.6.3
