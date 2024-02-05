@@ -41,20 +41,20 @@ if bool(config['dummy']):
     logging.basicConfig(level=logging.DEBUG)
     from apis.dummy.fpga_cryo_dummy import DummyCryoFPGA
     from apis.dummy.objective_dummy import DummyObjective
-    from apis.picoharp import PicoHarp
-    from apis.superk import SuperK
-    from toptica.lasersdk.dlcpro.v2_5_2 import DLCpro, NetworkConnection
+    # from apis.picoharp import PicoHarp
+    # from apis.superk import SuperK
+    # from toptica.lasersdk.dlcpro.v2_5_2 import DLCpro, NetworkConnection
 
     # Setup Dummy Control for Simulations/Debugging
     log.warning("Using Dummy Controls")
     fpga = DummyCryoFPGA()
     objective = DummyObjective()
-    harp = PicoHarp()
-    superk = SuperK('COM4')
+    harp = None
+    superk = None
     # Toptica connections must absolutely be opened in the main thread
     # otherwise weird asynchronous stuff goes wrong.
-    _conn = NetworkConnection('192.168.1.106')
-    laser602 = DLCpro(_conn)
+    _conn = None
+    laser602 = None
 else:
     logging.basicConfig(level=logging.WARNING)
     from apis.fpga_cryo import CryoFPGA
