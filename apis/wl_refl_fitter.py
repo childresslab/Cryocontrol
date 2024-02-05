@@ -61,7 +61,7 @@ def fit_n_gaussians(xdata,ydata,error=None,
                 params[f"g{i}_center"].set(value = acenter[i-1],min=lbound,max=ubound)
             params[f"g{i}_amplitude"].set(value = aamp[i-1]*asigma[i-1]*np.sqrt(2*np.pi)/np.pi,min=lbound,max=ubound)
             params[f"g{i}_sigma"].set(value = asigma[i-1],min=lbound,max=5)
-        new_results = model.fit(ydata,params=params,weights=weights,x=xdata)
+        new_results = model.fit(ydata,params=params,weights=weights,x=xdata, max_nfev=100)
         new_chisquare = new_results.chisqr
         if chisquare - new_chisquare > tol:
             chisquare = new_chisquare
@@ -111,7 +111,7 @@ def fit_exactly_n_gaussians(xdata,ydata,error=None,n=1,
             params[f"g{i}_center"].set(value = acenter[i-1],min=lbound,max=ubound)
         params[f"g{i}_amplitude"].set(value = aamp[i-1]*asigma[i-1]*np.sqrt(2*np.pi)/np.pi,min=lbound,max=ubound)
         params[f"g{i}_sigma"].set(value = asigma[i-1],min=lbound,max=5)
-    return model.fit(ydata,params=params,weights=weights,x=xdata),n
+    return model.fit(ydata,params=params,weights=weights,x=xdata, max_nfev=100),n
 
 class WLFitter():
     def __init__(self):
@@ -177,6 +177,7 @@ class WLFitter():
 
         signal_intp = intp.interp1d(self.nu,despectrumed_signal,'linear')
         uniform_signal = signal_intp(self.uniform_nu)
+        uniform_signal -= np.mean(uniform_signal)
 
         fftc = np.fft.ifft(uniform_signal,norm='ortho')
         fftu = np.abs(fftc)

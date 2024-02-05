@@ -7,13 +7,13 @@ import os
 from functools import partial
 from pathlib import Path
 
-from ..apis import fpga_cryo as fc # Code for controlling cryo fpga stuff
-from ..apis import spect # Code for controlling andor spectrometer
-from ..apis.scanner import Scanner
+from apis import fpga_cryo as fc # Code for controlling cryo fpga stuff
+from apis import spect # Code for controlling andor spectrometer
+from apis.scanner import Scanner
 
 
 # Set the save directory, and ensure it exists
-SAVE_DIR = Path(r"X:\DiamondCloud\Cryostat setup\Data\2022-05-30_cooldown_cont\cav_spectra")
+SAVE_DIR = Path(r"X:\DiamondCloud\Cryostat setup\Data\2023-08-23_B11")
 SAVE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Initial creation of live update plot
@@ -59,7 +59,7 @@ andor = spect.Spectrometer()
 # Set the exposure time
 # TODO: Make sure this is set to what you want it to be!!
 # It's useful to check in andor first
-andor.exp_time = 100
+andor.exp_time = 0.01
 
 # Get the calibrated wavelength axis
 wl = andor.get_wavelengths()
@@ -101,7 +101,11 @@ def init():
     print(starting_pos['cavity_pos'])
     # Quickly test fpga movement to catch errors early 
     cryo.set_cavity(*starting_pos['cavity_pos'])
-
+    cryo.set_aoms(None,8,write=True)
+    temp_dio = cryo.get_dio_array()
+    temp_dio[0] = 1
+    cryo.set_dio_array(temp_dio,write=True)
+    
 def cav_z_spectra(cav_z):
     # If we go to an invalid z, just return 0 and skip the point
     try:
@@ -129,14 +133,14 @@ def finish(results, completed):
         print("Something went wrong, I'll keep the spectrometer cold and not close devices")
     else:
         print("Scan succesful, I'll turn off the spectrometer and close devices")
-        cryo.close_fpga()
-        andor.stop_cooling()
-        andor.close()
+        #cryo.close_fpga()
+        #andor.stop_cooling()
+        #andor.close()
     
 # Scan Parameters
 centers = [0]
 spans = [16]
-steps = [400]
+steps = [320]
 labels = ["CAVZ"]
 output_type = object # 2D images from spectrometer are objects
 
@@ -150,7 +154,7 @@ cavity_scan = Scanner(cav_z_spectra,
 results = cavity_scan.run()
 # Save the scan, object type requires npz so set that
 # save cropped wavelengths by putting it in header.
-cavity_scan.save_results(SAVE_DIR/'spectrum_cavity_scan_bright', as_npz=True, header=str(wlc.tolist()))
+cavity_scan.save_results(SAVE_DIR/'wl_cavity_scan', as_npz=True, header=str(wlc.tolist()))
 
 # # Can uncomment the following to run the scan in reverse as well
 # # Remove the finish function from the above cavity_scan_3D definition

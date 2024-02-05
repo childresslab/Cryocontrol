@@ -55,6 +55,8 @@ if bool(config['dummy']):
     # otherwise weird asynchronous stuff goes wrong.
     _conn = NetworkConnection('192.168.1.106')
     laser602 = DLCpro(_conn)
+    spect = None
+
 else:
     logging.basicConfig(level=logging.WARNING)
     from apis.fpga_cryo import CryoFPGA
@@ -73,8 +75,12 @@ else:
     # otherwise weird asynchronous stuff goes wrong.
     _conn = NetworkConnection('192.168.1.106')
     laser602 = DLCpro(_conn)
+    spect = None
 
-devices = {'fpga':fpga, 'obj':objective, 'harp':harp, 'superk':superk, 'laser602':laser602}
+
+devices = {'fpga':fpga, 'obj':objective, 'harp':harp, 
+           'superk':superk, 'laser602':laser602,
+           'spect':None}
 
 # Dictionary to hold all loaded interfaces.
 interfaces = {}
@@ -286,8 +292,9 @@ for interface in interfaces.values():
 # Make the main window take up the whole page.
 dpg.set_primary_window('main_window',True)
 # dpg.show_style_editor()
-dpg.show_metrics()
+# dpg.show_metrics()
 # Start the application.
+
 # Running this in a seperate thread should be okay and allow for terminal control
 # However, this may cause issues on macOS if you're trying to develope from there.
 dpg_thread = Thread(target=rdpg.start_dpg)

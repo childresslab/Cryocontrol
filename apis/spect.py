@@ -98,8 +98,8 @@ class Spectrometer():
             self.sapi.ShamrockClose()
             raise(e)
         
-        def __del__(self):
-            self.close(force=True)
+    def __del__(self):
+        self.close(force=True)
 
     ##########################
     # Acquisition Management #

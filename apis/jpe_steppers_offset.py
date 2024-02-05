@@ -33,6 +33,7 @@ log.addHandler(fh)
 # Note how we define z_min is different than jpe document
 # since we care about the sign of the position in the jpe coordinates.
 # So here, negative value is actually highest mirror position.
+#TODO: Default to room temperature initialization
 stp_config = {"z_min" : -5750.0,            # um
               "z_max" : -250.0,             # um
               "um_per_click" : 5/17,        # um/Click (250um per rev, 850 clicks per rev.)
@@ -1180,7 +1181,7 @@ class JPEStepper():
         self.temp = 10
         self.stuck_iterations = 100
         self.initialize()
-        log.info("Set Gain = 180, Temp = 10 for cryo operation.")
+        log.info("Set Gain = 300, Temp = 10 for cryo operation.")
 
     def set_roomtemp(self) -> None:
         """Deinitialize and reinitialize the stage, changing the gain and

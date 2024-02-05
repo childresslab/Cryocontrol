@@ -7,12 +7,12 @@ import matplotlib.pyplot as plt
 from functools import partial
 from pathlib import Path
 
-from ..apis.scanner import Scanner
-from ..apis import fpga_cryo as fc # Code for controlling cryo fpga stuff
-from ..apis import spect as spect # Code for controlling andor spectrometer
+from apis.scanner import Scanner
+from apis import fpga_cryo as fc # Code for controlling cryo fpga stuff
+from apis import spect as spect # Code for controlling andor spectrometer
 
 # Set the save directory, and ensure it exists
-SAVE_DIR = Path(r"X:\DiamondCloud\Cryostat setup\Data\2022-05-30_cooldown_cont\wl_scan")
+SAVE_DIR = Path(r"X:\DiamondCloud\Cryostat setup\Data\2023-08-23_B11")
 SAVE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Initial creation of live update plot
@@ -62,7 +62,7 @@ andor = spect.Spectrometer()
 # Set the exposure time
 # TODO: Make sure this is set to what you want it to be!!
 # It's useful to check in andor first
-andor.exp_time = 10
+andor.exp_time = 7
 #andor.api.SetExposureTime(andor._exp_time)
 
 # Get the calibrated wavelength axis
@@ -109,7 +109,7 @@ def jpe_z_spectra(jpe_z):
         # Stay at current x,y position and move z value, then immediately
         # write the new position to fpga outputs
         cryo.set_jpe_pzs(None, None, jpe_z, write=True)
-    except ValueError:
+    except fc.FPGAValueError:
         return [[0]]
     # Start spectrum acquisition
     print("Acquiring...")
@@ -132,15 +132,15 @@ def finish(results, completed):
         print("Something went wrong, I'll keep the spectrometer cold and not close devices")
     else:
         print("Scan succesful, I'll turn off the spectrometer and close devices")
-        #cryo.set_jpe_pzs(*starting_pos['jpe_pos'], write=True)
+        cryo.set_jpe_pzs(*starting_pos['jpe_pos'], write=True)
         cryo.close_fpga()
         andor.stop_cooling()
         andor.close()
     
 # Scan Parameters
-centers = [-3]
-spans = [-6] #negative span means start high and go low, in this case 0 -> -6
-steps = [600]
+centers = [-3.25]
+spans = [-5.88] #negative span means start high and go low, in this case 0 -> -6
+steps = [320]
 labels = ["JPEZ"]
 output_type = object # 2D images from spectrometer are objects
 
@@ -154,7 +154,7 @@ cavity_scan_wl = Scanner(jpe_z_spectra,
 results = cavity_scan_wl.run()
 # Save the scan, object type requires npz so set that
 # save cropped wavelengths by putting it in header.
-cavity_scan_wl.save_results(SAVE_DIR/'wl_fwd_scan_new_pos', as_npz=True, header=str(wlc.tolist()))
+cavity_scan_wl.save_results(SAVE_DIR/'wl_fwd_scan_B11', as_npz=True, header=str(wlc.tolist()))
 
 # To be run before the scan starts
 def init():
@@ -165,10 +165,10 @@ def init():
 # Can uncomment the following to run the scan in reverse as well
 # Remove the finish function from the above cavity_scan_3D definition
 # to make sure the devices don't get closed.
-spans = [6]
+spans = [5.88]
 cavity_scan_wl_rev = Scanner(jpe_z_spectra,
                              centers, spans, steps,[],[], output_type,
                              labels=labels,
                              init = init, progress = progress, finish = finish)
 results = cavity_scan_wl_rev.run()
-cavity_scan_wl_rev.save_results(SAVE_DIR/'wl_rev_scan_new_pos', as_npz=True, header=str(wlc.tolist()))
+cavity_scan_wl_rev.save_results(SAVE_DIR/'wl_rev_scan_B11', as_npz=True, header=str(wlc.tolist()))

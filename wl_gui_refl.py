@@ -365,5 +365,6 @@ with dpg.file_dialog(label="Chose Reference File",
     dpg.add_file_extension("", color=(150, 255, 150, 255))
     dpg.add_file_extension(".csv", color=(0, 255, 0, 255), custom_text="[CSV]")
 dpg.set_primary_window('main_window',True)
+wl_tree.load()
 rdpg.start_dpg()
         

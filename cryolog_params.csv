@@ -1,0 +1,4 @@
+Cryostat/IP,'192.168.1.103'
+Cryostat/Port,7773
+Log/Cycle Time,5.0
+Log/Max Points,1000000

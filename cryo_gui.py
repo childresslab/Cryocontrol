@@ -136,7 +136,7 @@ with dpg.window(label="Cryo Log") as main_window:
                     with dpg.child_window(width=400,autosize_y=True,autosize_x=False,tag='wl_tree'):
                         wl_tree = rdpg.TreeDict('wl_tree','cryolog_params.csv')
                         wl_tree.add("Cryostat/Connect",True,callback=toggle_cryo,save=False)
-                        wl_tree.add("Cryostat/IP","192.168.1.105")
+                        wl_tree.add("Cryostat/IP","192.168.1.103")
                         wl_tree.add("Cryostat/Port",7773)
                         toggle_cryo(None,True,None)
 
