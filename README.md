@@ -5,8 +5,6 @@ Consolidated code for controlling our microcavity cryostat experiment.
 ```
 cryocontrol/
 |-- *.py
-|-- acq_scripts/
-|   |-- *.py
 |-- ana_scripts/
 |   |-- *.py
 |-- apis/
@@ -19,19 +17,17 @@ cryocontrol/
     |-- *.py
 ```
 
-Python scripts in the root folder produce GUIs for controlling various aspects of the system.
-As well as ones that are useful for viewing saved data.
+Python scripts in the root folder produce GUIs and scripts for controlling various aspects of the system, 
+as well as ones that are useful for viewing saved data.
 e.g. the main gui for controlling the whole experiment or one for viewing plots nicely.
 
-`acq_scripts/` contains python scripts that produce one off measurements and save the date.
-e.g. a script that takes a spectrum over various cavity positions.
 `ana_scripts/` contains python scripts that analyze previously saved data.
 e.g. plotting some data nicely, or running fits
 
 `apis/` contains libraries of code for controlling hardware or running complex operations.
 Basically if you want to import some useful functions for doing something, this is where the script
 you're importing from should go. The subdirectory `dummy/` contains simulated versions of real apis
-for testing out interface code during the developement cycle. 
+for testing out interface code during the development cycle. 
 
 `tests/` contains files used for testing any other code in the repo. This should produce no
 real physical side effects, and only confirm that the logic of the code remains correct between
